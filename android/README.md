@@ -1,5 +1,6 @@
 BITIP IP切换器深度集成源码包
 
+
 接口使用，使用总共有个5个步骤，详细调用请参考MainActivity.kt
 1、第一步，获取节点服务器列表，并缓存
    使用ServerAPI  public  fun getServerList(user:String,key:String):ServerListResult
