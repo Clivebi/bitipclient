@@ -261,7 +261,7 @@ class ProtocolTcpClient {
     private  var cryptBlock:CryptBlock? =null
     var socket:Socket? = null
     var isConnected:Boolean = false
-    var errorMsg:String = "NetworkFailed"
+    var errorMsg:String = "Connect Server Failed"
 
 
 
@@ -273,7 +273,7 @@ class ProtocolTcpClient {
             if (!socket!!.isConnected) {
                 return
             }
-            errorMsg = "AuthFailed"
+            errorMsg = "Invalid UserName/Password"
             val auth = AuthPacket(username.toByteArray(),token.toByteArray(),1,secrect)
             val crypt = RSACryptBlock()
             val pkt = RAWPacket(auth.buffer.size)

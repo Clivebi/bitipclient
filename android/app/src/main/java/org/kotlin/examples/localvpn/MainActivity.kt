@@ -14,16 +14,30 @@ import kotlinx.android.synthetic.main.activity_main.*
 import kotlinx.coroutines.experimental.launch
 import java.util.*
 import kotlin.math.log
+import android.widget.Toast
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
+
 
 class MainActivity : AppCompatActivity() {
 
-    class AsyncHandler:Handler() {
+    inner class AsyncHandler:Handler() {
         var activity:MainActivity?=null
         override fun handleMessage(msg: Message?) {
             super.handleMessage(msg)
             activity?.asyncStartVPN()
         }
     }
+
+    inner class ServiceStausReceiver : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent){
+            var text:String = textView.text.toString()
+            text += "\r\nstatus:"
+            text += intent.getStringExtra("error")
+            textView.text = text
+        }
+    }
+    val  statusReceiver:ServiceStausReceiver = ServiceStausReceiver()
     val  handle:AsyncHandler = AsyncHandler()
     var  list:List<VPNNode> = mutableListOf<VPNNode>()
     var  index:Int = 0
@@ -41,6 +55,14 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        //监听服务广播消息
+        val filter = IntentFilter(VPN_BROADCAST_ACTION_NAME)
+        registerReceiver(statusReceiver,filter)
+    }
+
+    override fun onDestroy() {
+        unregisterReceiver(statusReceiver)
+        super.onDestroy()
     }
 
     fun stopVpn(view: View){
@@ -66,7 +88,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    fun workThread(){
+    fun workThread():Boolean{
         // 1、第一步，获取服务器列表，并缓存
         // 2、第二步，遍历服务器列表，可以根据喜好对省份进行过滤，选中节点
         // 3、第三步，获取节点的实时服务IP地址和端口
@@ -79,13 +101,13 @@ class MainActivity : AppCompatActivity() {
             val result = serverAPI.getServerList(user,key)
             if (result.status != 0) {
                 Log.d(TAG,result.message)
-                return
+                return false
             }
             this.list = result.list
         }
         if (this.list.count() == 0) {
             Log.d(TAG,"NO VPN Node Server")
-            return
+            return false
         }
         // 2、第二步，遍历服务器列表，可以根据喜好对省份进行过滤，选中节点
         // 3、第三步，获取节点的实时服务IP地址和端口
@@ -97,7 +119,7 @@ class MainActivity : AppCompatActivity() {
             val ipResult = serverAPI.getRealTimeAddress(user,key,x.name)
             if (ipResult.status != 0) {
                 Log.d(TAG,ipResult.message)
-                return
+                return false
             }
             if (ipResult.address.port == 0) {
                 continue
@@ -115,20 +137,24 @@ class MainActivity : AppCompatActivity() {
         }
         if (selectedAddrss.address.length == 0) {
             Log.d(TAG,"NO Selected Address")
-            return
+            return false
         }
         // 5、第五步，传递参数，启动VPN服务
         handle.sendMessage(Message())
+        return true
     }
 
     fun startVpn(view: View){
         if (handle.activity != null) {
-            Log.d(TAG,"connecting...")
+            Log.d(TAG,"connecting...,Waiting")
             return
         }
         handle.activity = this
+        stopVpn(view)
         launch {
-            workThread()
+            if (!workThread()){
+                handle.activity = null
+            }
         }
     }
 

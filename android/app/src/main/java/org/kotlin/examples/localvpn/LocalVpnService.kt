@@ -11,8 +11,14 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.nio.ByteBuffer
 import android.support.v4.content.LocalBroadcastManager
-const val TAG = "LocalVpnService"
+import android.app.ActivityManager
+import android.content.Context
+import android.os.Binder
+import android.os.Binder.getCallingPid
 
+
+const val TAG = "bitipVPN"
+const val VPN_BROADCAST_ACTION_NAME = "com.bitip.vpn.service.status"
 
 
 
@@ -50,13 +56,13 @@ class LocalVpnService : VpnService() {
     private fun setupVpn() {
         var builder = Builder()
                 .addAddress("10.0.1.15", 24)
-                .addDnsServer("8.8.8.8")
-                .addDnsServer("8.8.4.4")
+                .addDnsServer("223.5.5.5")
+                .addDnsServer("223.6.6.6")
                 .addRoute("0.0.0.0", 0)
-                .addDisallowedApplication("org.kotlin.examples.localvpn")
                 .setBlocking(true)
                 .setMtu(1500)
                 .setSession(TAG)
+                .addDisallowedApplication(getAppPkg(Binder.getCallingPid()))
         vpnInterface = builder.establish()
         Log.d(TAG, "VPN interface has established")
     }
@@ -65,19 +71,41 @@ class LocalVpnService : VpnService() {
         launch { vpnRunLoop() }
     }
 
+    private fun getAppPkg(pid: Int): String {
+        var processName = ""
+        val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        if (activityManager != null) {
+            val list = activityManager.runningAppProcesses
+            for (info in list) {
+                if (info.pid == pid) {
+                    processName = info.processName
+                    break
+                }
+            }
+        }
+        return processName
+    }
+
+
+    private  fun broadcastStatus(error:String) {
+        var intent = Intent(VPN_BROADCAST_ACTION_NAME)
+        intent.putExtra("error",error)
+        sendBroadcast(intent)
+    }
+
     suspend fun vpnRunLoop() {
         Log.d(TAG, "running loop")
-        setupVpn()
         this.client = ProtocolTcpClient(username,token,server,port)
         if (!client!!.isConnected) {
-            val intent = Intent("com.localvpn.servicer.error")
-            intent.putExtra("error", client!!.errorMsg)
-            LocalBroadcastManager.getInstance(applicationContext).sendBroadcast(intent)
+            this.broadcastStatus(this.client!!.errorMsg)
             Log.i(TAG, "connect server failed ..."+client!!.errorMsg)
             stopVpn()
             return
+        }else{
+            this.broadcastStatus(this.client!!.errorMsg)
         }
-
+        this.protect(client!!.socket)
+        setupVpn()
         val vpnInputStream = FileInputStream(vpnInterface!!.fileDescriptor).channel
         val vpnOutputStream = FileOutputStream(vpnInterface!!.fileDescriptor).channel
         var alive = true
