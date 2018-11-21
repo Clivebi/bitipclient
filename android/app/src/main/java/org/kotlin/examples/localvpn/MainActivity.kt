@@ -96,7 +96,7 @@ class MainActivity : AppCompatActivity() {
         // 5、第五步，传递参数，启动VPN服务
         selectedAddrss = IPAddress("",0)
         val serverAPI:ServerAPI = ServerAPI()
-        if (list.count()==0 || (Date().time-this.updateDate.time) > 8*60) {
+        if (list.count()==0 || (Date().time-this.updateDate.time) > 20*60) {
             // 1、第一步，获取服务器列表，并缓存
             val result = serverAPI.getServerList(user,key)
             if (result.status != 0) {
@@ -124,11 +124,15 @@ class MainActivity : AppCompatActivity() {
             if (ipResult.address.port == 0) {
                 continue
             }
-            // 4、第四步，根据需要判断IP是否被自己的账户使用过,例子中不做判断
-            //if (serverAPI.checkIP(user,ipResult.address.address) == false) {
-            //    selectedAddrss = ipResult.address
-            //    break
-            //}
+            // 4、第四步，根据需要判断IP是否被自己的账户使用过
+            val isUsed = serverAPI.checkIP(user,key,ipResult.address.address)
+            if (isUsed.status != 0) {
+                Log.d(TAG,isUsed.message)
+                continue
+            }
+            if (isUsed.isused) {
+                continue
+            }
             selectedAddrss = ipResult.address
             selectedNode = x
             index = i+1
@@ -147,6 +151,7 @@ class MainActivity : AppCompatActivity() {
     fun startVpn(view: View){
         if (handle.activity != null) {
             Log.d(TAG,"connecting...,Waiting")
+            Toast.makeText(this, "请等待上一个操作完成", Toast.LENGTH_SHORT).show();
             return
         }
         handle.activity = this

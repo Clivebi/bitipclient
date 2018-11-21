@@ -17,7 +17,7 @@ import android.os.Binder
 import android.os.Binder.getCallingPid
 
 
-const val TAG = "bitipVPN"
+const val TAG = "LocalVPN"
 const val VPN_BROADCAST_ACTION_NAME = "com.bitip.vpn.service.status"
 
 
@@ -62,28 +62,12 @@ class LocalVpnService : VpnService() {
                 .setBlocking(true)
                 .setMtu(1500)
                 .setSession(TAG)
-                .addDisallowedApplication(getAppPkg(Binder.getCallingPid()))
         vpnInterface = builder.establish()
         Log.d(TAG, "VPN interface has established")
     }
 
     private fun startVpn() {
         launch { vpnRunLoop() }
-    }
-
-    private fun getAppPkg(pid: Int): String {
-        var processName = ""
-        val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        if (activityManager != null) {
-            val list = activityManager.runningAppProcesses
-            for (info in list) {
-                if (info.pid == pid) {
-                    processName = info.processName
-                    break
-                }
-            }
-        }
-        return processName
     }
 
 
