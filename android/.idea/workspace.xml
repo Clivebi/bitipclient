@@ -2749,7 +2749,7 @@
       <window_info anchor="bottom" id="Build" order="7" weight="0.32952926" />
       <window_info anchor="right" id="Gradle" order="3" />
       <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
-      <window_info active="true" anchor="bottom" id="Debug" order="3" visible="true" weight="0.7546362" />
+      <window_info anchor="bottom" id="Debug" order="3" weight="0.7546362" />
       <window_info anchor="right" id="Device File Explorer" order="3" side_tool="true" />
       <window_info anchor="right" id="Theme Preview" order="3" />
       <window_info id="Favorites" order="2" side_tool="true" />

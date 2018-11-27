@@ -22,6 +22,8 @@ func getWaterConfig() water.Config {
 	}
 }
 
+var gfirstCall bool = true
+
 type routeEntry struct {
 	address    string
 	viaAddress string
@@ -48,7 +50,7 @@ func (o *OSSepcialSetup) addRollbackRouteEntry(addr, gateway string) {
 
 func (o *OSSepcialSetup) exec(command string, args []string) error {
 	cmd := exec.Command(command, args...)
-	log.Println(command, args)
+	//log.Println(command, args)
 	e := cmd.Run()
 	if e != nil {
 		log.Println("Command failed: ", e)
@@ -68,10 +70,13 @@ func (o *OSSepcialSetup) Setup(ifName, address, gateway string, mtu int, dns []s
 	if err != nil {
 		return err
 	}
-	time.Sleep(time.Second * 1)
-	err = o.setDeviceNameServer(ifName, dns)
-	if err != nil {
-		return err
+	if gfirstCall {
+		time.Sleep(time.Second * 1)
+		err = o.setDeviceNameServer(ifName, dns)
+		if err != nil {
+			return err
+		}
+		gfirstCall = false
 	}
 	time.Sleep(time.Second * 1)
 	o.defaultGateWay, o.defaultGateWayDevice, err = o.getDefaultGateway()
@@ -87,12 +92,12 @@ func (o *OSSepcialSetup) Setup(ifName, address, gateway string, mtu int, dns []s
 		addr := v + "/32"
 		o.addRoute(addr, gateway)
 		o.addRollbackRouteEntry(addr, gateway)
-		time.Sleep(time.Second * 1)
+		//time.Sleep(time.Second * 1)
 	}
 	for _, v := range exclude {
 		o.addRoute(v, o.defaultGateWay)
 		o.addRollbackRouteEntry(v, o.defaultGateWay)
-		time.Sleep(time.Second * 1)
+		//time.Sleep(time.Second * 1)
 	}
 	err = o.setDefaultGateway(gateway)
 	return nil

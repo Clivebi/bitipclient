@@ -5,43 +5,36 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/x509"
-	"encoding/json"
-	"encoding/pem"
-	"errors"
 	"github.com/songgao/water"
 	"log"
 	mrand "math/rand"
 	"net"
-	"os"
-	"os/signal"
 	"strings"
 	"time"
 )
 
 type ClientConfig struct {
-	ServerAddress string   `json:"server"`
-	UserName      string   `json:"username"`
-	Password      string   `json:"password"`
-	DNS           []string `json:"dns"`
-	Exclude       []string `json:"exclude"`
+	UserName string   `json:"username"`
+	Password string   `json:"password"`
+	DNS      []string `json:"dns"`
+	Exclude  []string `json:"exclude"`
 }
 
 type VPNConnector struct {
 	conf    *ClientConfig
 	rasKey  *rsa.PublicKey
 	ifc     *water.Interface
-	Link    net.Conn
 	Chiper  CryptBlock
 	special *OSSepcialSetup
+	con     net.Conn
 }
 
 func (o *VPNConnector) close() {
-	if o.Link != nil {
-		o.Link.Close()
-	}
 	if o.special != nil {
 		o.special.Rollback()
+	}
+	if o.con != nil {
+		o.con.Close()
 	}
 }
 
@@ -54,33 +47,34 @@ func (o *VPNConnector) randKey() []byte {
 	return ret
 }
 
-func (o *VPNConnector) setupTun() error {
-	arrays := strings.Split(o.conf.ServerAddress, ":")
-	o.conf.Exclude = append(o.conf.Exclude, arrays[0]+"/32")
-	ifce, err := water.New(getWaterConfig())
-	if err != nil {
-		return err
+func (o *VPNConnector) setupTunDevice(address string) error {
+	arrays := strings.Split(address, ":")
+	Exclude := make([]string, len(o.conf.Exclude))
+	copy(Exclude, o.conf.Exclude)
+	Exclude = append(Exclude, arrays[0]+"/32")
+	if o.ifc == nil {
+		ifce, err := water.New(getWaterConfig())
+		if err != nil {
+			return err
+		}
+		o.ifc = ifce
 	}
-	o.ifc = ifce
 	o.special = NewOSSepcialSetup()
-	return o.special.Setup(o.ifc.Name(), "10.1.0.10/24", "10.1.0.1", 1500, o.conf.DNS, o.conf.Exclude)
+	return o.special.Setup(o.ifc.Name(), "10.1.0.10/24", "10.1.0.1", 1500, o.conf.DNS, Exclude)
 }
 
-func (o *VPNConnector) internalConnect() (net.Conn, error) {
-	//if o.conf.UDP {
-	//	return reliable.DialWithOptions(o.conf.ServerAddress, time.Second*5)
-	//}
-	return net.Dial("tcp4", o.conf.ServerAddress)
-}
-
-func (o *VPNConnector) connect() error {
-	log.Println("start connect server " + o.conf.ServerAddress)
-	con, err := o.internalConnect()
+func (o *VPNConnector) connectVPN(address string) error {
+	if o.con != nil {
+		o.con.Close()
+		o.con = nil
+	}
+	if o.special != nil {
+		o.special.Rollback()
+	}
+	con, err := net.Dial("tcp4", address)
 	if err != nil {
 		return err
 	}
-	log.Println("start auth use username=" + o.conf.UserName)
-	o.Link = con
 	req := &startup_request{
 		secrect: o.randKey(),
 		user:    o.conf.UserName,
@@ -103,26 +97,35 @@ func (o *VPNConnector) connect() error {
 	net := &network_layer{
 		data: buf,
 	}
-	err = net.WriteToIO(o.Link)
+	err = net.WriteToIO(con)
 	if err != nil {
 		return err
 	}
 	rspNet := &network_layer{}
-	err = rspNet.ReadFromIO(o.Link)
+	err = rspNet.ReadFromIO(con)
 	if err != nil {
 		return err
 	}
 	buf, err = o.Chiper.Decrypt(rspNet.data)
-	log.Println("connect server ok")
+	if err != nil {
+		return err
+	}
+	err = o.setupTunDevice(address)
+	if err != nil {
+		return err
+	}
+	go o.copyLocalToRemote(con)
+	go o.copyRemoteToLocal(con)
+	o.con = con
 	return nil
 }
 
-func (o *VPNConnector) copyLocalToRemote(ex chan error) {
+func (o *VPNConnector) copyLocalToRemote(con net.Conn) {
 	packet := make([]byte, 3000)
 	for {
 		n, err := o.ifc.Read(packet)
 		if err != nil {
-			ex <- err
+			log.Println("read from tun faield:" + err.Error())
 			break
 		}
 		pro := &protocol_layer{
@@ -137,99 +140,39 @@ func (o *VPNConnector) copyLocalToRemote(ex chan error) {
 		}
 		wbuf = bytes.NewBuffer(nil)
 		net.WriteToIO(wbuf)
-		_, err = o.Link.Write(wbuf.Bytes())
+		_, err = con.Write(wbuf.Bytes())
 		if err != nil {
-			ex <- errors.New("write packet to tcp  " + err.Error())
+			log.Println("write to remote failed:" + err.Error())
 			break
 		}
 	}
 }
 
-func (o *VPNConnector) copyRemoteToLocal(ex chan error) {
-	var err error
-	var buf []byte
-	bio := bufio.NewReader(o.Link)
+func (o *VPNConnector) copyRemoteToLocal(con net.Conn) {
+	bio := bufio.NewReader(con)
+	defer con.Close()
 	for {
 		net := &network_layer{}
-		err = net.ReadFromIO(bio)
+		err := net.ReadFromIO(bio)
 		if err != nil {
-			err = errors.New("read packet from tcp failed " + err.Error())
+			log.Println("read from remote faield:" + err.Error())
 			break
 		}
-		buf, err = o.Chiper.Decrypt(net.data)
+		buf, err := o.Chiper.Decrypt(net.data)
 		if err != nil {
-			err = errors.New("decrypt tcp data failed " + err.Error())
+			log.Println("decrypt network data faield:" + err.Error())
 			break
 		}
 		pro := &protocol_layer{}
 		err = pro.ReadFromBuffer(buf)
 		if err != nil {
-			err = errors.New("decode protocol layer failed " + err.Error())
+			log.Println("decode protocol layer failed:" + err.Error())
 			break
 		}
 		if pro.command != command_tun_data {
-			err = errors.New("invalid command type " + err.Error())
+			log.Println("invalid command type")
 			break
 		}
-		_, err = o.ifc.Write(pro.data)
-		if err != nil {
-			err = errors.New("write packet to tun failed " + err.Error())
-			break
-		}
+		o.ifc.Write(pro.data)
 	}
-	ex <- err
-}
-
-func RunClient() error {
-	buf, err := LoadLocalConfigFile("public.pem")
-	if err != nil {
-		return err
-	}
-	block, _ := pem.Decode(buf)
-	if block == nil || block.Type != "PUBLIC KEY" {
-		return errors.New("failed to decode PEM block containing public key " + err.Error())
-	}
-
-	puk, err := x509.ParsePKIXPublicKey(block.Bytes)
-	if err != nil {
-		return errors.New("failed to parse public key" + err.Error())
-	}
-	buf, err = LoadLocalConfigFile("client.conf")
-	if err != nil {
-		return err
-	}
-	conf := &ClientConfig{}
-	err = json.Unmarshal(buf, conf)
-	if err != nil {
-		return err
-	}
-
-	client := &VPNConnector{
-		conf:   conf,
-		rasKey: puk.(*rsa.PublicKey),
-	}
-	defer client.close()
-	err = client.connect()
-	if err != nil {
-		log.Println("connect failed :" + err.Error())
-		return err
-	}
-	err = client.setupTun()
-	if err != nil {
-		log.Println("setup tun failed " + err.Error())
-		return err
-	}
-	ex := make(chan error)
-	go func() {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c)
-		<-c
-		ex <- errors.New("user exit the app")
-	}()
-	log.Println("start packets transcation...")
-	go client.copyLocalToRemote(ex)
-	go client.copyRemoteToLocal(ex)
-	err = <-ex
-	log.Println("exit with error " + err.Error())
-	return err
 }

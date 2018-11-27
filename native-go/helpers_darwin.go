@@ -107,7 +107,7 @@ func (o *OSSepcialSetup) addRollbackRouteEntry(ifName, addr, gateway string) {
 
 func (o *OSSepcialSetup) exec(command string, args []string) error {
 	cmd := exec.Command(command, args...)
-	log.Println("exec "+command+": ", args)
+	//log.Println("exec "+command+": ", args)
 	e := cmd.Run()
 	if e != nil {
 		log.Println("Command failed: ", e)
