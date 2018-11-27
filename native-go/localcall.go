@@ -344,6 +344,13 @@ func (o *SDKServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.EscapedPath() == "/bitip/changeip.do" {
 		buf, err = o.HandleChangeIP(r)
 	}
+	if r.URL.EscapedPath() == "/bitip/shutdown.do" {
+		if o.con != nil {
+			o.con.close()
+		}
+		err = nil
+		buf = []byte("ok")
+	}
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)

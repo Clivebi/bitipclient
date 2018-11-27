@@ -32,9 +32,11 @@ type VPNConnector struct {
 func (o *VPNConnector) close() {
 	if o.special != nil {
 		o.special.Rollback()
+		o.special = nil
 	}
 	if o.con != nil {
 		o.con.Close()
+		o.con = nil
 	}
 }
 
