@@ -48,11 +48,11 @@ func (o VPNNode) String() string {
 }
 
 type SDKConfig struct {
-	UserName     string
-	Password     string
-	Province     string
-	City         string
-	IgnoreUsedIP bool
+	UserName     string `json:"_"`
+	Password     string `json:"_"`
+	Province     string `json:"province"`
+	City         string `json:"city"`
+	IgnoreUsedIP bool   `json:"ignoreusedip"`
 }
 
 type SDKServer struct {
@@ -170,6 +170,9 @@ func (s *SDKServer) HandleLogin(r *http.Request) ([]byte, error) {
 	conf := &SDKConfig{}
 	conf.UserName = r.FormValue("username")
 	conf.Password = r.FormValue("password")
+	conf.Province = ""
+	conf.City = ""
+	conf.IgnoreUsedIP = false
 	conf.Province = r.FormValue("province")
 	conf.City = r.FormValue("city")
 	conf.IgnoreUsedIP = (r.FormValue("ignoreusedip") == "true")
@@ -180,6 +183,17 @@ func (s *SDKServer) HandleLogin(r *http.Request) ([]byte, error) {
 	}
 	s.conf = conf
 	return []byte(text), err
+}
+
+// /bitip/options.do
+func (s *SDKServer) HandleOption(r *http.Request) ([]byte, error) {
+	if s.conf == nil {
+		return nil, errors.New("user not login")
+	}
+	s.conf.Province = r.FormValue("province")
+	s.conf.City = r.FormValue("city")
+	s.conf.IgnoreUsedIP = (r.FormValue("ignoreusedip") == "true")
+	return json.Marshal(s.conf)
 }
 
 func (s *SDKServer) updateVPNNode() error {
@@ -343,6 +357,9 @@ func (o *SDKServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.EscapedPath() == "/bitip/changeip.do" {
 		buf, err = o.HandleChangeIP(r)
+	}
+	if r.URL.EscapedPath() == "/bitip/options.do" {
+		buf, err = o.HandleOption(r)
 	}
 	if r.URL.EscapedPath() == "/bitip/shutdown.do" {
 		if o.con != nil {
