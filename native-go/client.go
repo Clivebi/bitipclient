@@ -66,12 +66,10 @@ func (o *VPNConnector) setupTunDevice(address string) error {
 }
 
 func (o *VPNConnector) connectVPN(address string) error {
-	if o.con != nil {
-		o.con.Close()
-		o.con = nil
-	}
-	if o.special != nil {
-		o.special.Rollback()
+	o.close()
+	err := o.setupTunDevice(address)
+	if err != nil {
+		return err
 	}
 	con, err := net.Dial("tcp4", address)
 	if err != nil {
@@ -94,6 +92,7 @@ func (o *VPNConnector) connectVPN(address string) error {
 	pro.WriteToIO(wbuf)
 	buf, err := rsa.EncryptPKCS1v15(rand.Reader, o.rasKey, wbuf.Bytes())
 	if err != nil {
+		o.close()
 		return err
 	}
 	net := &network_layer{
@@ -101,19 +100,18 @@ func (o *VPNConnector) connectVPN(address string) error {
 	}
 	err = net.WriteToIO(con)
 	if err != nil {
+		o.close()
 		return err
 	}
 	rspNet := &network_layer{}
 	err = rspNet.ReadFromIO(con)
 	if err != nil {
+		o.close()
 		return err
 	}
 	buf, err = o.Chiper.Decrypt(rspNet.data)
 	if err != nil {
-		return err
-	}
-	err = o.setupTunDevice(address)
-	if err != nil {
+		o.close()
 		return err
 	}
 	go o.copyLocalToRemote(con)

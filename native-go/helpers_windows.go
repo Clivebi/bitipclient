@@ -50,7 +50,7 @@ func (o *OSSepcialSetup) addRollbackRouteEntry(addr, gateway string) {
 
 func (o *OSSepcialSetup) exec(command string, args []string) error {
 	cmd := exec.Command(command, args...)
-	//log.Println(command, args)
+	log.Println(command, args)
 	e := cmd.Run()
 	if e != nil {
 		log.Println("Command failed: ", e)
@@ -62,7 +62,9 @@ func (o *OSSepcialSetup) Rollback() {
 	for _, v := range o.rollbackentrys {
 		o.delRoute(v.address)
 	}
+	time.Sleep(time.Second * 1)
 	o.setDefaultGateway(o.defaultGateWay)
+	time.Sleep(time.Second * 1)
 }
 
 func (o *OSSepcialSetup) Setup(ifName, address, gateway string, mtu int, dns []string, exclude []string) error {
@@ -92,12 +94,12 @@ func (o *OSSepcialSetup) Setup(ifName, address, gateway string, mtu int, dns []s
 		addr := v + "/32"
 		o.addRoute(addr, gateway)
 		o.addRollbackRouteEntry(addr, gateway)
-		//time.Sleep(time.Second * 1)
+		time.Sleep(time.Second * 1)
 	}
 	for _, v := range exclude {
 		o.addRoute(v, o.defaultGateWay)
 		o.addRollbackRouteEntry(v, o.defaultGateWay)
-		//time.Sleep(time.Second * 1)
+		time.Sleep(time.Second * 1)
 	}
 	err = o.setDefaultGateway(gateway)
 	return nil
