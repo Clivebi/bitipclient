@@ -298,10 +298,7 @@ class ProtocolTcpClient {
     }
 
     public  fun readFrame():ByteArray? {
-        val rsp = EncodeHelper.readPacket(socket!!.getInputStream(),cryptBlock!!)
-        if (rsp == null) {
-            return null
-        }
+        val rsp = EncodeHelper.readPacket(socket!!.getInputStream(),cryptBlock!!) ?: return null
         return rsp.getPayload()
     }
 

@@ -5,16 +5,11 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.ParcelFileDescriptor
 import android.util.Log
-import kotlinx.coroutines.experimental.launch
+import kotlinx.coroutines.*
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
 import java.nio.ByteBuffer
-import android.support.v4.content.LocalBroadcastManager
-import android.app.ActivityManager
-import android.content.Context
-import android.os.Binder
-import android.os.Binder.getCallingPid
 
 
 const val TAG = "LocalVPN"
@@ -36,16 +31,12 @@ class LocalVpnService : VpnService() {
             this.stopVpn()
         }else {
             username = intent!!.getStringExtra("USER")
-            token = intent!!.getStringExtra("PASSWORD")
-            server = intent!!.getStringExtra("SERVER")
-            port = intent!!.getIntExtra("PORT",0)
+            token = intent.getStringExtra("PASSWORD")
+            server = intent.getStringExtra("SERVER")
+            port = intent.getIntExtra("PORT",0)
             this.startVpn()
         }
         return Service.START_STICKY
-    }
-
-    override fun onCreate() {
-        super.onCreate()
     }
 
     override fun onDestroy() {
@@ -54,7 +45,7 @@ class LocalVpnService : VpnService() {
     }
 
     private fun setupVpn() {
-        var builder = Builder()
+        val builder = Builder()
                 .addAddress("10.0.1.15", 24)
                 .addDnsServer("223.5.5.5")
                 .addDnsServer("223.6.6.6")
@@ -67,17 +58,19 @@ class LocalVpnService : VpnService() {
     }
 
     private fun startVpn() {
-        launch { vpnRunLoop() }
+        GlobalScope.launch {
+            vpnRunLoop()
+        }
     }
 
 
     private  fun broadcastStatus(error:String) {
-        var intent = Intent(VPN_BROADCAST_ACTION_NAME)
+        val intent = Intent(VPN_BROADCAST_ACTION_NAME)
         intent.putExtra("error",error)
         sendBroadcast(intent)
     }
 
-    suspend fun vpnRunLoop() {
+    private fun vpnRunLoop() {
         Log.d(TAG, "running loop")
         this.client = ProtocolTcpClient(username,token,server,port)
         if (!client!!.isConnected) {
@@ -93,7 +86,7 @@ class LocalVpnService : VpnService() {
         val vpnInputStream = FileInputStream(vpnInterface!!.fileDescriptor).channel
         val vpnOutputStream = FileOutputStream(vpnInterface!!.fileDescriptor).channel
         var alive = true
-        launch {
+        GlobalScope.launch {
             loop@ while (alive) {
                 try {
                     val buffer = ByteBuffer.allocate(2000)

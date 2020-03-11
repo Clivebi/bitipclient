@@ -11,13 +11,11 @@ import android.os.Message
 import android.util.Log
 import android.view.View
 import kotlinx.android.synthetic.main.activity_main.*
-import kotlinx.coroutines.experimental.launch
 import java.util.*
-import kotlin.math.log
 import android.widget.Toast
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
-
+import kotlinx.coroutines.*
 
 class MainActivity : AppCompatActivity() {
 
@@ -42,10 +40,10 @@ class MainActivity : AppCompatActivity() {
     var  list:List<VPNNode> = mutableListOf<VPNNode>()
     var  index:Int = 0
     var  updateDate:Date = Date()
-    val  user:String = "clive@admin.com"
-    val  key:String = "e10adc3949ba59abbe56e057f20f883e"
+    val  user:String = "test@admin.com"
+    val  key:String = "99816876t"
     var  selectedAddrss:IPAddress = IPAddress("",0)
-    var  selectedNode:VPNNode = VPNNode("","",0,"","")
+    var  selectedNode:VPNNode = VPNNode("","",0,"","","")
 
     companion object {
         private const val TAG="LocalVPN";
@@ -77,6 +75,7 @@ class MainActivity : AppCompatActivity() {
         var text:String = "selected node:"+selectedNode.name+"\r\n"
         text += ("province:"+selectedNode.province)
         text += ("city:"+selectedNode.city+"\r\n")
+        text += ("carrier:"+selectedNode.carrier+"\r\n")
         text += ("address:"+selectedAddrss.address)
         textView.text= text
         handle.activity = null
@@ -125,14 +124,14 @@ class MainActivity : AppCompatActivity() {
                 continue
             }
             // 4、第四步，根据需要判断IP是否被自己的账户使用过
-            val isUsed = serverAPI.checkIP(user,key,ipResult.address.address)
-            if (isUsed.status != 0) {
-                Log.d(TAG,isUsed.message)
-                continue
-            }
-            if (isUsed.isused) {
-                continue
-            }
+            //val isUsed = serverAPI.checkIP(user,key,ipResult.address.address)
+            //if (isUsed.status != 0) {
+            //    Log.d(TAG,isUsed.message)
+            //    continue
+            //}
+            //if (isUsed.isused) {
+            //    continue
+            //}
             selectedAddrss = ipResult.address
             selectedNode = x
             index = i+1
@@ -156,7 +155,7 @@ class MainActivity : AppCompatActivity() {
         }
         handle.activity = this
         stopVpn(view)
-        launch {
+        GlobalScope.launch{
             if (!workThread()){
                 handle.activity = null
             }

@@ -15,10 +15,10 @@ import (
 )
 
 const (
-	URL_LOGIN    = "http://120.39.243.128:1815/login.do"
-	URL_IP_LIST  = "http://120.39.243.128:1815/getips.do"
-	URL_IP       = "http://120.39.243.128:1815/getip.do"
-	URL_IP_CHECK = "http://120.39.243.128:7000/checkip.do"
+	URL_LOGIN    = "http://auth.superip.app:1815/login.do"
+	URL_IP_LIST  = "http://auth.superip.app:1815/getips.do"
+	URL_IP       = "http://auth.superip.app:1815/getip.do"
+	URL_IP_CHECK = "http://auth.superip.app:8703/checkip.do"
 )
 
 type CommandResponse struct {
@@ -37,6 +37,7 @@ type VPNNode struct {
 	Port     int    `json:"port"`
 	Province string `json:"province"`
 	City     string `json:"city"`
+	Carrier  string `json:"carrier"`
 }
 
 func (o VPNNode) String() string {
@@ -53,6 +54,7 @@ type SDKConfig struct {
 	Province     string `json:"province"`
 	City         string `json:"city"`
 	IgnoreUsedIP bool   `json:"ignoreusedip"`
+	Carrier      string `json:"carrier"`
 }
 
 type SDKServer struct {
@@ -145,6 +147,11 @@ func (s *SDKServer) ParseNode(text string) error {
 				n.Province = decoder[int(rv)]
 			}
 		}
+		if v, ok := item["f"]; ok {
+			if rv, ok := v.(float64); ok {
+				n.Carrier = decoder[int(rv)]
+			}
+		}
 		if v, ok := item["e"]; ok {
 			if rv, ok := v.(float64); ok {
 				n.City = decoder[int(rv)]
@@ -175,6 +182,8 @@ func (s *SDKServer) HandleLogin(r *http.Request) ([]byte, error) {
 	conf.IgnoreUsedIP = false
 	conf.Province = r.FormValue("province")
 	conf.City = r.FormValue("city")
+	conf.Carrier = r.FormValue("carrier")
+
 	conf.IgnoreUsedIP = (r.FormValue("ignoreusedip") == "true")
 	url := URL_LOGIN + "?" + "email=" + conf.UserName + "&pass=" + conf.Password
 	text, err := s.DoCommandRequest(url)
@@ -192,6 +201,7 @@ func (s *SDKServer) HandleOption(r *http.Request) ([]byte, error) {
 	}
 	s.conf.Province = r.FormValue("province")
 	s.conf.City = r.FormValue("city")
+	s.conf.Carrier = r.FormValue("carrier")
 	s.conf.IgnoreUsedIP = (r.FormValue("ignoreusedip") == "true")
 	return json.Marshal(s.conf)
 }
@@ -282,6 +292,11 @@ func (s *SDKServer) HandleChangeIP(r *http.Request) ([]byte, error) {
 			if s.conf.City != s.nodes[i].City {
 				log.Println("city flt")
 				continue
+			}
+		}
+		if len(s.conf.Carrier) != 0 {
+			if s.conf.Carrier != s.nodes[i].Carrier {
+				log.Println("carrier flt")
 			}
 		}
 		addr, port, err := s.GetRealTimeAddress(s.nodes[i].Name)

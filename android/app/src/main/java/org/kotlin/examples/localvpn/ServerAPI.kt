@@ -22,7 +22,8 @@ data class VPNNode(val name:String,     //机器GUID
                    val address:String,  //机器的当前地址
                    val port:Int,        //机器的当前端口，地址和端口可能随时会改变，连接前用getRealTimeAddress获取最新地址
                    val province:String, //IP所在省份
-                   val city:String)     //IP所在城市
+                   val city:String,     //IP所在城市
+                   val carrier:String)  //IP运营商
 
 data class ServerListResult(val status:Int,     //如果请求失败，这个是失败的原因
                             val message:String, //如果请求失败，这个是失败的原因
@@ -59,7 +60,7 @@ class ServerAPI {
     */
     public  fun getUserInfo(user:String,key:String):UserInfo{
         var index:Int =1;
-        val url:String = "http://120.39.243.128:1815/login.do?email="+user+"&pass="+key
+        val url:String = "http://auth.superip.app:1815/login.do?email="+user+"&pass="+key
         val resp:String = readHttpText(url)
         if (resp.isEmpty()) {
             return UserInfo(NetworkError,NetworkErorText,"","","","","")
@@ -83,7 +84,7 @@ class ServerAPI {
         var map = mutableMapOf<Int, String>()
         var ret  = mutableListOf<VPNNode>()
         var index:Int =1;
-        val url:String = "http://120.39.243.128:1815/getips.do?email="+user+"&pass="+key
+        val url:String = "http://auth.superip.app:1815/getips.do?email="+user+"&pass="+key
         val resp = readHttpText(url)
         if (resp.isEmpty()) {
             return ServerListResult(NetworkError,NetworkErorText,ret)
@@ -109,6 +110,7 @@ class ServerAPI {
             val port:Int = obj.get("b").asInt
             var province:String? = map[obj.get("d").asInt]
             var city:String? = map[obj.get("e").asInt]
+            var carrier:String? = map[obj.get("f").asInt]
             val address:String = obj.get("g").asString
             if (province == null) {
                 province = "Unknown"
@@ -116,7 +118,10 @@ class ServerAPI {
             if (city==null) {
                 city = "Unknown"
             }
-            ret.add(0, VPNNode(name,address,port,province,city))
+            if (carrier== null){
+                carrier = "Unknown"
+            }
+            ret.add(0, VPNNode(name,address,port,province,city,carrier))
         }
         return ServerListResult(content.status,content.message,ret)
     }
@@ -125,7 +130,7 @@ class ServerAPI {
     获取VPN节点的实时地址，name 为VPNNode中的name字段
     */
     public  fun getRealTimeAddress(user:String,key:String,name:String):GetIPResult{
-        val url:String = "http://120.39.243.128:1815/getip.do?email="+user+"&pass="+key+"&name="+name
+        val url:String = "http://auth.superip.app:1815/getip.do?email="+user+"&pass="+key+"&name="+name
         val resp = readHttpText(url)
         if (resp.isEmpty()) {
             return GetIPResult(NetworkError,NetworkErorText,IPAddress("0.0.0.0",0))
@@ -147,7 +152,7 @@ class ServerAPI {
     只有需要全局过滤自己所有终端已经使用过的IP的客户才需要调用此接口
     */
     public  fun checkIP(user:String,key:String,ip:String):IPCheckResult {
-        val url:String = "http://120.39.243.128:7000/checkip.do?user="+user+"&ip="+ip+"&pass="+key
+        val url:String = "http://auth.superip.app:8703/checkip.do?user="+user+"&ip="+ip+"&pass="+key
         val resp = readHttpText(url)
         if (resp.isEmpty()) {
             return IPCheckResult(NetworkError,NetworkErorText,false)
