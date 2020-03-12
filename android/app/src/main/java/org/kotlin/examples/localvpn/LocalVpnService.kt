@@ -9,32 +9,27 @@ import kotlinx.coroutines.*
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
+import java.lang.Exception
 import java.nio.ByteBuffer
 
-
-const val TAG = "LocalVPN"
-const val VPN_BROADCAST_ACTION_NAME = "com.bitip.vpn.service.status"
-
-
-
 class LocalVpnService : VpnService() {
+    class CommandParameter(val user:String,val token:String,val server:String,val port:Int)
+    private var mNetwork:ProtocolTCPClient? = null
+    private var mVPN: ParcelFileDescriptor? = null
+    private lateinit var mParameter:CommandParameter
 
-    private var client:ProtocolTcpClient? = null
-    private var vpnInterface: ParcelFileDescriptor? = null
-
-    private var username:String = ""
-    private var token:String = ""
-    private var server:String = ""
-    private var port:Int = 0
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.getStringExtra("COMMAND") == "STOP") {
-            this.stopVpn()
+            this.stopVPN()
         }else {
-            username = intent!!.getStringExtra("USER")
-            token = intent.getStringExtra("PASSWORD")
-            server = intent.getStringExtra("SERVER")
-            port = intent.getIntExtra("PORT",0)
-            this.startVpn()
+            mParameter = CommandParameter(intent!!.getStringExtra(KEY_USER_NAME),
+                     intent.getStringExtra(KEY_PASSWORD),
+                     intent.getStringExtra(KEY_SERVER),
+                     intent.getIntExtra(KEY_SERVER_PORT,8080))
+            val id = intent.getStringExtra(KEY_START_ID)
+            GlobalScope.launch {
+                vpnRunLoop(id)
+            }
         }
         return Service.START_STICKY
     }
@@ -44,7 +39,7 @@ class LocalVpnService : VpnService() {
         stopSelf()
     }
 
-    private fun setupVpn() {
+    private fun setupVPN():Boolean {
         val builder = Builder()
                 .addAddress("10.0.1.15", 24)
                 .addDnsServer("223.5.5.5")
@@ -52,39 +47,45 @@ class LocalVpnService : VpnService() {
                 .addRoute("0.0.0.0", 0)
                 .setBlocking(true)
                 .setMtu(1500)
-                .setSession(TAG)
-        vpnInterface = builder.establish()
-        Log.d(TAG, "VPN interface has established")
-    }
-
-    private fun startVpn() {
-        GlobalScope.launch {
-            vpnRunLoop()
+                .setSession("bitipVPN")
+                .addDisallowedApplication(packageName)
+        var result = false
+        try {
+            mVPN = builder.establish()
+            Log.d(TAG, "VPN interface has established")
+            result = true
+        }catch (exp:Exception){
+            exp.printStackTrace()
         }
+        return result
     }
 
-
-    private  fun broadcastStatus(error:String) {
-        val intent = Intent(VPN_BROADCAST_ACTION_NAME)
-        intent.putExtra("error",error)
+    private  fun broadcastConnectResult(id:String,result:String){
+        val intent = Intent(VPN_SERVICE_ACTION_RESULT)
+        intent.putExtra(KEY_START_ID,id)
+        intent.putExtra(KEY_START_ERROR,result)
         sendBroadcast(intent)
     }
 
-    private fun vpnRunLoop() {
-        Log.d(TAG, "running loop")
-        this.client = ProtocolTcpClient(username,token,server,port)
-        if (!client!!.isConnected) {
-            this.broadcastStatus(this.client!!.errorMsg)
-            Log.i(TAG, "connect server failed ..."+client!!.errorMsg)
-            stopVpn()
+    private fun vpnRunLoop(id:String) {
+        Log.d(TAG, "start running loop")
+        val result = ProtocolTCPClient.newClientWithError(mParameter.user,mParameter.token,mParameter.server,mParameter.port)
+        if (result.result == null){
+            broadcastConnectResult(id,result.error)
+            Log.e(TAG,"connect server failed:"+result.error)
+            stopVPN()
             return
-        }else{
-            this.broadcastStatus(this.client!!.errorMsg)
         }
-        this.protect(client!!.socket)
-        setupVpn()
-        val vpnInputStream = FileInputStream(vpnInterface!!.fileDescriptor).channel
-        val vpnOutputStream = FileOutputStream(vpnInterface!!.fileDescriptor).channel
+        val con = result.result
+        this.protect(con.socket)
+        if(!setupVPN()){
+            broadcastConnectResult(id, ESTABLISH_ERROR)
+            Log.e(TAG, ESTABLISH_ERROR)
+            stopVPN()
+            return
+        }
+        val vpnInputStream = FileInputStream(mVPN!!.fileDescriptor).channel
+        val vpnOutputStream = FileOutputStream(mVPN!!.fileDescriptor).channel
         var alive = true
         GlobalScope.launch {
             loop@ while (alive) {
@@ -97,20 +98,20 @@ class LocalVpnService : VpnService() {
                         break
                     }
                     if (buffer.hasArray()) {
-                        client!!.writeFrame(buffer.array(),0,readBytes)
+                        con.writeFrame(buffer.array(),0,readBytes)
                     }
                 }catch(e:IOException){
-                    Log.d(TAG,"IOCopy0 Exception"+e.localizedMessage)
                     alive = false
                     break
                 }
 
             }
         }
-
+        mNetwork = con
+        broadcastConnectResult(id,"connect ok")
         loop@ while (alive) {
             try {
-                val frame = client!!.readFrame()
+                val frame = con.readFrame()
                 if (frame == null) {
                     Log.d(TAG,"read packet from tcp failed")
                     alive = false
@@ -118,21 +119,31 @@ class LocalVpnService : VpnService() {
                 }
                 vpnOutputStream.write(ByteBuffer.wrap(frame))
             }catch(e:IOException){
-                Log.d(TAG,"IOCopy1 Exception"+e.localizedMessage)
                 alive = false
                 break
             }
         }
-        stopVpn()
         Log.i(TAG, "exit loop")
+        stopVPN()
     }
-
-    private fun stopVpn() {
-        vpnInterface?.close()
-        if (client != null) {
-            client!!.Close()
+    private fun stopVPN() {
+        mVPN?.close()
+        mVPN = null
+        if (mNetwork != null) {
+            mNetwork!!.close()
         }
         stopSelf()
         Log.i(TAG, "Stopped VPN")
+    }
+    companion object{
+        private  const val TAG ="VPNService"
+        private  const val ESTABLISH_ERROR = "establish vpn failed"
+        const val VPN_SERVICE_ACTION_RESULT = "com.bitip.vpn.service.start.result"
+        const val KEY_START_ID = "start.id"
+        const val KEY_START_ERROR = "start.error"
+        const val KEY_USER_NAME = "start.name"
+        const val KEY_PASSWORD = "start.password"
+        const val KEY_SERVER = "start.server"
+        const val KEY_SERVER_PORT = "start.server.port"
     }
 }

@@ -7,7 +7,6 @@ import android.net.VpnService
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
 import android.os.Handler
-import android.os.Message
 import android.util.Log
 import android.view.View
 import kotlinx.android.synthetic.main.activity_main.*
@@ -18,33 +17,31 @@ import android.content.IntentFilter
 import kotlinx.coroutines.*
 
 class MainActivity : AppCompatActivity() {
-
-    inner class AsyncHandler:Handler() {
-        var activity:MainActivity?=null
-        override fun handleMessage(msg: Message?) {
-            super.handleMessage(msg)
-            activity?.asyncStartVPN()
-        }
-    }
-
-    inner class ServiceStausReceiver : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent){
-            var text:String = textView.text.toString()
-            text += "\r\nstatus:"
-            text += intent.getStringExtra("error")
-            textView.text = text
-        }
-    }
-    val  statusReceiver:ServiceStausReceiver = ServiceStausReceiver()
-    val  handle:AsyncHandler = AsyncHandler()
+    var  isWorking:Boolean = false
+    var  currentID:String = Date().toString()
     var  list:List<VPNNode> = mutableListOf<VPNNode>()
     var  index:Int = 0
     var  updateDate:Date = Date()
-    val  user:String = "test@admin.com"
-    val  key:String = "99816876t"
-    var  selectedAddrss:IPAddress = IPAddress("",0)
+    var  connectTime:Long = System.currentTimeMillis()
+    private val  receiver:ServiceStartActionReceiver = ServiceStartActionReceiver()
+    private val  handler = Handler()
+    private  val  user:String = "test@admin.com"
+    private  val  key:String = "99816876t"
+    var  selectedAddress:IPAddress = IPAddress("",0)
     var  selectedNode:VPNNode = VPNNode("","",0,"","","")
 
+    inner class ServiceStartActionReceiver : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent){
+            val id = intent.getStringExtra(LocalVpnService.KEY_START_ID)
+            val result = intent.getStringExtra(LocalVpnService.KEY_START_ERROR)
+            if (id == currentID){
+                addLog("status:${result}")
+                addLog("connect time:${System.currentTimeMillis()-connectTime} millis")
+                isWorking = false
+            }
+            Log.d(TAG,"${id} ${result} ${currentID}")
+        }
+    }
     companion object {
         private const val TAG="LocalVPN";
         private const val VPN_REQUEST_CODE = 0x0F
@@ -53,14 +50,22 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        //监听服务广播消息
-        val filter = IntentFilter(VPN_BROADCAST_ACTION_NAME)
-        registerReceiver(statusReceiver,filter)
+        //监听连接结果广播
+        registerReceiver(receiver,IntentFilter(LocalVpnService.VPN_SERVICE_ACTION_RESULT))
     }
 
     override fun onDestroy() {
-        unregisterReceiver(statusReceiver)
+        unregisterReceiver(receiver)
         super.onDestroy()
+    }
+
+    fun addLog(log:String){
+        handler.post {
+            textView.text = "${textView.text}\r\n${log}"
+        }
+    }
+    private fun clearLog(){
+        textView.text = ""
     }
 
     fun stopVpn(view: View){
@@ -70,15 +75,13 @@ class MainActivity : AppCompatActivity() {
         startService(intent)
     }
 
-    fun asyncStartVPN(){
-        Log.d(TAG,"Start VPN")
-        var text:String = "selected node:"+selectedNode.name+"\r\n"
-        text += ("province:"+selectedNode.province)
-        text += ("city:"+selectedNode.city+"\r\n")
-        text += ("carrier:"+selectedNode.carrier+"\r\n")
-        text += ("address:"+selectedAddrss.address)
-        textView.text= text
-        handle.activity = null
+    private fun startService(){
+        addLog("start VPN service")
+        addLog("selected node:${selectedNode.name}")
+        addLog("province:${selectedNode.province}")
+        addLog("city:${selectedNode.city}")
+        addLog("carrier:${selectedNode.carrier}")
+        addLog("address:${selectedAddress.address}")
         val intent= VpnService.prepare(this)
         if (intent!=null){
             startActivityForResult(intent, VPN_REQUEST_CODE);
@@ -87,25 +90,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    fun workThread():Boolean{
+    private fun selectNode():Boolean{
         // 1、第一步，获取服务器列表，并缓存
         // 2、第二步，遍历服务器列表，可以根据喜好对省份进行过滤，选中节点
         // 3、第三步，获取节点的实时服务IP地址和端口
         // 4、第四步，根据需要判断IP是否被自己的账户使用过
         // 5、第五步，传递参数，启动VPN服务
-        selectedAddrss = IPAddress("",0)
+        selectedAddress = IPAddress("",0)
         val serverAPI:ServerAPI = ServerAPI()
         if (list.count()==0 || (Date().time-this.updateDate.time) > 20*60) {
             // 1、第一步，获取服务器列表，并缓存
             val result = serverAPI.getServerList(user,key)
             if (result.status != 0) {
-                Log.d(TAG,result.message)
+                addLog("getServerList error :${result.message}")
                 return false
             }
             this.list = result.list
         }
         if (this.list.count() == 0) {
-            Log.d(TAG,"NO VPN Node Server")
+            addLog("server list unavailable")
             return false
         }
         // 2、第二步，遍历服务器列表，可以根据喜好对省份进行过滤，选中节点
@@ -117,7 +120,8 @@ class MainActivity : AppCompatActivity() {
             val x = this.list[i]
             val ipResult = serverAPI.getRealTimeAddress(user,key,x.name)
             if (ipResult.status != 0) {
-                Log.d(TAG,ipResult.message)
+                //Log.d(TAG,ipResult.message)
+                addLog("get real time address error:${ipResult.message}")
                 return false
             }
             if (ipResult.address.port == 0) {
@@ -132,32 +136,38 @@ class MainActivity : AppCompatActivity() {
             //if (isUsed.isused) {
             //    continue
             //}
-            selectedAddrss = ipResult.address
+            selectedAddress = ipResult.address
             selectedNode = x
             index = i+1
             break
 
         }
-        if (selectedAddrss.address.length == 0) {
-            Log.d(TAG,"NO Selected Address")
+        if (selectedAddress.address.isEmpty()) {
+            addLog("no server match request")
             return false
         }
         // 5、第五步，传递参数，启动VPN服务
-        handle.sendMessage(Message())
         return true
     }
 
     fun startVpn(view: View){
-        if (handle.activity != null) {
+        if (this.isWorking){
             Log.d(TAG,"connecting...,Waiting")
             Toast.makeText(this, "请等待上一个操作完成", Toast.LENGTH_SHORT).show();
             return
         }
-        handle.activity = this
+        this.isWorking = true
+        currentID = Date().toString()
+        clearLog()
         stopVpn(view)
         GlobalScope.launch{
-            if (!workThread()){
-                handle.activity = null
+            addLog("start select node...")
+            var time = System.currentTimeMillis()
+            if(selectNode()){
+                addLog("select time= ${System.currentTimeMillis()-time} millis")
+                handler.post {
+                    startService()
+                }
             }
         }
     }
@@ -165,12 +175,15 @@ class MainActivity : AppCompatActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == VPN_REQUEST_CODE && resultCode== Activity.RESULT_OK){
+            currentID = Date().toString()
+            connectTime = System.currentTimeMillis()
             val intent = Intent(this, LocalVpnService::class.java)
             intent.putExtra("COMMAND", "START")
-            intent.putExtra("USER",user)
-            intent.putExtra("PASSWORD",key)
-            intent.putExtra("SERVER",selectedAddrss.address)
-            intent.putExtra("PORT",selectedAddrss.port)
+            intent.putExtra(LocalVpnService.KEY_USER_NAME,user)
+            intent.putExtra(LocalVpnService.KEY_PASSWORD,key)
+            intent.putExtra(LocalVpnService.KEY_SERVER,selectedAddress.address)
+            intent.putExtra(LocalVpnService.KEY_SERVER_PORT,selectedAddress.port)
+            intent.putExtra(LocalVpnService.KEY_START_ID,currentID)
             startService(intent)
         }
     }

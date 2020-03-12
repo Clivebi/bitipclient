@@ -59,7 +59,6 @@ class ServerAPI {
     获取用户信息
     */
     public  fun getUserInfo(user:String,key:String):UserInfo{
-        var index:Int =1;
         val url:String = "http://auth.superip.app:1815/login.do?email="+user+"&pass="+key
         val resp:String = readHttpText(url)
         if (resp.isEmpty()) {
