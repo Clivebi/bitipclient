@@ -32,7 +32,7 @@ func EncryptFile(src, dst string) error {
 	return ioutil.WriteFile(dst, buf, os.ModePerm)
 }
 
-func decryptBuffer(buf []byte) {
+func DecryptBuffer(buf []byte) {
 	ch, err := rc4.NewCipher(confkey)
 	if err != nil {
 		return

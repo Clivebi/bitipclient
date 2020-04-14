@@ -14,10 +14,22 @@ import (
 )
 
 type ClientConfig struct {
-	UserName string   `json:"username"`
-	Password string   `json:"password"`
-	DNS      []string `json:"dns"`
-	Exclude  []string `json:"exclude"`
+	UserName  string   `json:"username"`
+	Password  string   `json:"password"`
+	DNS       []string `json:"dns"`
+	Exclude   []string `json:"exclude"`
+	LocalAddr net.Addr
+}
+
+type routeEntry struct {
+	address    string
+	viaAddress string
+}
+
+type OSSepcialSetup struct {
+	rollbackentrys       []routeEntry
+	defaultGateWay       string
+	defaultGateWayDevice string
 }
 
 type VPNConnector struct {
@@ -71,7 +83,11 @@ func (o *VPNConnector) connectVPN(address string) error {
 	if err != nil {
 		return err
 	}
-	con, err := net.Dial("tcp4", address)
+	dial := net.Dialer{
+		Timeout:   time.Second * 15,
+		LocalAddr: o.conf.LocalAddr,
+	}
+	con, err := dial.Dial("tcp", address)
 	if err != nil {
 		return err
 	}

@@ -1,16 +1,106 @@
 package bitipclient
 
 import (
-	"bufio"
-	"bytes"
 	"github.com/songgao/water"
+	//"golang.org/x/sys/windows"
+	"golang.org/x/text/encoding/simplifiedchinese"
 	"log"
 	"net"
 	"os/exec"
-	"strconv"
-	"strings"
-	"time"
+	"syscall"
+	"unsafe"
 )
+
+var (
+	ptrInit,
+	ptrDeleteTableEntry,
+	ptrAddIncludeTableEntry,
+	ptrAddExcludeTableEntry uintptr
+)
+
+func init() {
+	lib, err := syscall.LoadLibrary("RouteHelp.dll")
+	if err != nil {
+		panic("LoadLibrary " + err.Error())
+	}
+
+	ptrInit = getProcAddr(lib, "Init")
+	ptrDeleteTableEntry = getProcAddr(lib, "DeleteTableEntry")
+	ptrAddIncludeTableEntry = getProcAddr(lib, "AddIncludeTableEntry")
+	ptrAddExcludeTableEntry = getProcAddr(lib, "AddExcludeTableEntry")
+}
+
+func getProcAddr(lib syscall.Handle, name string) uintptr {
+	addr, err := syscall.GetProcAddress(lib, name)
+	if err != nil {
+		panic(name + " " + err.Error())
+	}
+	return addr
+}
+
+func ipToInt(ip net.IP) int {
+	s := ip.To4()
+	rs := 0
+	rs |= (int([]byte(s)[0]))
+	rs |= (int([]byte(s)[1]) << 8)
+	rs |= (int([]byte(s)[2]) << 16)
+	rs |= (int([]byte(s)[3]) << 24)
+	return rs
+}
+
+func initRuouteHelp(ifc string, gateway int) (int, error) {
+	frindName, err := syscall.UTF16PtrFromString(ifc)
+	if err != nil {
+		return -1, err
+	}
+	name := uintptr(unsafe.Pointer(frindName))
+	ret, _, callErr := syscall.Syscall(ptrInit, 2, name, uintptr(gateway), 0)
+	if callErr != 0 {
+		return -1, callErr
+	}
+	return int(ret), err
+}
+
+func AddIncludeTableEntry(cidr string) (int, error) {
+	ip, ipm, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return -1, err
+	}
+	ret, _, callErr := syscall.Syscall(ptrAddIncludeTableEntry, 2, uintptr(ipToInt(ip)), uintptr(ipToInt(net.IP(ipm.Mask))), 0)
+	if callErr != 0 {
+		return -1, callErr
+	}
+	return int(ret), err
+}
+
+func AddExcludeTableEntry(cidr string) (int, error) {
+	ip, ipm, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return -1, err
+	}
+	ret, _, callErr := syscall.Syscall(ptrAddExcludeTableEntry, 2, uintptr(ipToInt(ip)), uintptr(ipToInt(net.IP(ipm.Mask))), 0)
+	if callErr != 0 {
+		return -1, callErr
+	}
+	return int(ret), err
+}
+
+func DeleteTableEntry(cidr string) (int, error) {
+	ip, ipm, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return -1, err
+	}
+	ret, _, callErr := syscall.Syscall(ptrDeleteTableEntry, 2, uintptr(ipToInt(ip)), uintptr(ipToInt(net.IP(ipm.Mask))), 0)
+	if callErr != 0 {
+		return -1, callErr
+	}
+	return int(ret), err
+}
+
+func GB2312toUTF8(s []byte) []byte {
+	d, _ := simplifiedchinese.GBK.NewDecoder().Bytes(s)
+	return d
+}
 
 func getWaterConfig() water.Config {
 	return water.Config{
@@ -22,90 +112,18 @@ func getWaterConfig() water.Config {
 	}
 }
 
-var gfirstCall bool = true
-
-type routeEntry struct {
-	address    string
-	viaAddress string
-}
-
-type OSSepcialSetup struct {
-	rollbackentrys       []routeEntry
-	defaultGateWay       string
-	defaultGateWayDevice string
-}
-
-func NewOSSepcialSetup() *OSSepcialSetup {
-	o := &OSSepcialSetup{
-		rollbackentrys: []routeEntry{},
-	}
-	return o
-}
-func (o *OSSepcialSetup) addRollbackRouteEntry(addr, gateway string) {
-	o.rollbackentrys = append(o.rollbackentrys, routeEntry{
-		address:    addr,
-		viaAddress: gateway,
-	})
-}
-
-func (o *OSSepcialSetup) exec(command string, args []string) error {
+func (o *VPNConnector) exec(command string, args []string) error {
 	cmd := exec.Command(command, args...)
 	log.Println(command, args)
-	e := cmd.Run()
-	if e != nil {
-		log.Println("Command failed: ", e)
+	buf, err := cmd.Output()
+	if err != nil {
+		log.Println("Command failed: ", string(GB2312toUTF8(buf)))
 	}
-	return e
+	log.Println(string(GB2312toUTF8(buf)))
+	return err
 }
 
-func (o *OSSepcialSetup) Rollback() {
-	for _, v := range o.rollbackentrys {
-		o.delRoute(v.address)
-	}
-	time.Sleep(time.Second * 1)
-	o.setDefaultGateway(o.defaultGateWay)
-	time.Sleep(time.Second * 1)
-}
-
-func (o *OSSepcialSetup) Setup(ifName, address, gateway string, mtu int, dns []string, exclude []string) error {
-	err := o.setDeviceNetworkParameters(ifName, address, gateway, strconv.Itoa(mtu))
-	if err != nil {
-		return err
-	}
-	if gfirstCall {
-		time.Sleep(time.Second * 1)
-		err = o.setDeviceNameServer(ifName, dns)
-		if err != nil {
-			return err
-		}
-		gfirstCall = false
-	}
-	time.Sleep(time.Second * 1)
-	o.defaultGateWay, o.defaultGateWayDevice, err = o.getDefaultGateway()
-	if err != nil {
-		return err
-	}
-	time.Sleep(time.Second * 1)
-	err = o.setDefaultGateway(gateway)
-	if err != nil {
-		return err
-	}
-	for _, v := range dns {
-		addr := v + "/32"
-		o.addRoute(addr, gateway)
-		o.addRollbackRouteEntry(addr, gateway)
-		time.Sleep(time.Second * 1)
-	}
-	for _, v := range exclude {
-		o.addRoute(v, o.defaultGateWay)
-		o.addRollbackRouteEntry(v, o.defaultGateWay)
-		time.Sleep(time.Second * 1)
-	}
-	err = o.setDefaultGateway(gateway)
-	return nil
-}
-
-func (o *OSSepcialSetup) setDeviceNetworkParameters(iName string, address string, gatway string, mtu string) error {
+func (o *VPNConnector) setDeviceNetworkParameters(iName string, address string, gatway string, mtu string) error {
 	ip, mask, err := net.ParseCIDR(address)
 	if err != nil {
 		return err
@@ -125,7 +143,7 @@ func (o *OSSepcialSetup) setDeviceNetworkParameters(iName string, address string
 	return o.exec("netsh", args)
 }
 
-func (o *OSSepcialSetup) setDeviceNameServer(iName string, dns []string) error {
+func (o *VPNConnector) setDeviceNameServer(iName string, dns []string) error {
 	//netsh interface ip set dns name=”本地连接” source=static addr=218.85.157.99 register=primary
 	args := []string{"interface", "ipv4", "set", "dns", "name=" + iName,
 		"source=static",
@@ -145,69 +163,4 @@ func (o *OSSepcialSetup) setDeviceNameServer(iName string, dns []string) error {
 	}
 	o.exec("netsh", args)
 	return nil
-}
-
-func (o *OSSepcialSetup) getDefaultGateway() (string, string, error) {
-	cmd := exec.Command("route", "print", "-p", "0.0.0.0")
-	buf, err := cmd.Output()
-	if err != nil {
-		return "", "", err
-	}
-	r := bytes.NewReader(buf)
-	br := bufio.NewReader(r)
-	for {
-		l, err := br.ReadSlice('\n')
-		if err != nil {
-			break
-		}
-		if !strings.Contains(string(l), "0.0.0.0") {
-			continue
-		}
-		l = bytes.Replace(l, []byte{'\r'}, []byte{}, -1)
-		l = bytes.Replace(l, []byte{'\n'}, []byte{}, -1)
-		ls := bytes.Split(l, []byte{32})
-		xl := [][]byte{}
-		for _, v := range ls {
-			if bytes.Contains(v, []byte{32}) {
-				continue
-			}
-			if len(v) == 0 {
-				continue
-			}
-			xl = append(xl, v)
-		}
-		if len(xl) < 5 || string(xl[0]) != "0.0.0.0" {
-			continue
-		}
-		return string(xl[2]), string(xl[3]), nil
-	}
-	return "", "", nil
-}
-
-func (o *OSSepcialSetup) addRoute(addr, viaAddr string) error {
-	ip, mask, err := net.ParseCIDR(addr)
-	if err != nil {
-		return err
-	}
-	//route add 192.168.100.0 mask 255.255.255.248 192.168.1.1 metric 3 if 2
-	args := []string{"add", ip.String(), "mask", net.IP(mask.Mask).String(), viaAddr}
-	return o.exec("route", args)
-}
-
-func (o *OSSepcialSetup) delRoute(addr string) error {
-	//route delete 192.168.100.0
-	ip, _, err := net.ParseCIDR(addr)
-	if err != nil {
-		return err
-	}
-	args := []string{"delete", ip.String()}
-	return o.exec("route", args)
-}
-
-func (o *OSSepcialSetup) setDefaultGateway(gateWay string) error {
-	args := []string{"delete", "0.0.0.0"}
-	o.exec("route", args)
-	//route add 192.168.100.0 mask 255.255.255.248 192.168.1.1 metric 3 if 2
-	args = []string{"add", "0.0.0.0", "mask", "0.0.0.0", gateWay}
-	return o.exec("route", args)
 }

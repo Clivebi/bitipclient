@@ -226,7 +226,7 @@ func (o *startup_request) ReadFromIO(r io.Reader) error {
 		return err
 	}
 	if len(o.secrect) != secrectlen {
-		return fmt.Errorf("invalid secrect length %V", len(o.secrect))
+		return fmt.Errorf("invalid secrect length %d", len(o.secrect))
 	}
 	return nil
 }

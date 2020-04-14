@@ -21,7 +21,7 @@ func PullHttpFile(url string) (ret []byte, err error) {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("get http response error!")
+		return nil, errors.New("get http response error! " + resp.Status)
 	}
 	defer resp.Body.Close()
 	ret, err = ioutil.ReadAll(resp.Body)

@@ -1,34 +1,44 @@
 package bitipclient
 
 import (
+	"crypto/md5"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 )
 
 const (
-	URL_LOGIN    = "http://auth.superip.app:1815/login.do"
-	URL_IP_LIST  = "http://auth.superip.app:1815/getips.do"
-	URL_IP       = "http://auth.superip.app:1815/getip.do"
-	URL_IP_CHECK = "http://auth.superip.app:8703/checkip.do"
+	FILE_P_CODER   = "1.json"
+	FILE_S_CODER   = "2.json"
+	FILE_NODE_LIST = "3.json"
+	CMNET_HOST     = "cmnet.kaopuip.com"
+	URL_P_CODER    = "http://%v:6709/getpcoder.do"
+	URL_S_CODER    = "http://%v:6709/getcoder.do"
+	URL_LOGIN      = "http://%v:6709/login.do"
+	URL_IP_LIST    = "http://%v:6709/getips2.do"
+	URL_IP         = "http://%v:6709/getip2.do"
+	URL_IP_CHECK   = "http://%v:6706/ipcheck.do"
+	defaultPort    = 8808
 )
 
 type CommandResponse struct {
 	Status  uint32 `json:"status"`
 	Message string `json:"message"`
 	Body    string `json:"body"`
-}
-
-type CheckResponse struct {
-	IsUsed bool `json:"isused"`
 }
 
 type VPNNode struct {
@@ -57,40 +67,98 @@ type SDKConfig struct {
 	Carrier      string `json:"carrier"`
 }
 
+type OutAddr struct {
+	addr string
+}
+
+func (o OutAddr) Network() string {
+	return "tcp"
+}
+func (o OutAddr) String() string {
+	return o.addr + ":0"
+}
+
 type SDKServer struct {
-	conf   *SDKConfig
-	nodes  []*VPNNode
-	expire time.Time
-	index  int
-	con    *VPNConnector
+	conf           *SDKConfig
+	nodes          []*VPNNode
+	index          uint
+	con            Connector
+	pcoder         map[int]string
+	scoder         map[int]string
+	path           string
+	coderExp       time.Time
+	listExp        time.Time
+	lastActiveNode *VPNNode
+	cmnetip        []string
+	localip        *net.TCPAddr
 }
 
 func NewServer() *SDKServer {
 	s := &SDKServer{
-		conf:   nil,
-		nodes:  []*VPNNode{},
-		expire: time.Now(),
-		index:  0,
-		con:    nil,
+		conf:           nil,
+		nodes:          []*VPNNode{},
+		index:          uint(time.Now().UnixNano()) % 10000,
+		con:            nil,
+		pcoder:         make(map[int]string),
+		scoder:         make(map[int]string),
+		coderExp:       time.Unix(0, 0),
+		listExp:        time.Unix(0, 0),
+		lastActiveNode: nil,
+		cmnetip:        []string{},
 	}
+	home, _ := Home()
+	s.path = filepath.Join(home, "kaopuIP")
+	os.MkdirAll(s.path, os.ModePerm)
+	log.Println("datapath:", s.path)
+	s.init()
 	return s
 }
 
-func (s *SDKServer) DoHttpRequest(url string) ([]byte, error) {
-	resp, err := http.Get(url)
+func (s *SDKServer) isHttpError(err error) bool {
+	return strings.Contains(err.Error(), "http response")
+}
+
+//使用默认的接口出去，以便绕过自己的代理
+func (s *SDKServer) DoHttpRequestWithTimeout(url string, timeout time.Duration) ([]byte, error) {
+	client := http.Client{
+		Timeout: timeout,
+	}
+	rsp, err := client.Get(url)
 	if err != nil {
+		log.Println(err)
 		return nil, err
 	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("Internal error:" + resp.Status)
+	defer rsp.Body.Close()
+	if rsp.StatusCode != http.StatusOK {
+		return nil, errors.New("http response error :" + rsp.Status)
 	}
-	defer resp.Body.Close()
-	ret, err := ioutil.ReadAll(resp.Body)
-	return ret, err
+	return ioutil.ReadAll(rsp.Body)
+}
+
+func (s *SDKServer) getFilePath(name string) string {
+	return filepath.Join(s.path, name)
+}
+
+func (s *SDKServer) init() {
+	buf, err := ioutil.ReadFile(s.getFilePath(FILE_P_CODER))
+	if err == nil && len(buf) > 0 {
+		s.pcoder = s.BuildStringDecoder(buf)
+	}
+	buf, err = ioutil.ReadFile(s.getFilePath(FILE_S_CODER))
+	if err == nil && len(buf) > 0 {
+		s.scoder = s.BuildStringDecoder(buf)
+	}
+	buf, err = ioutil.ReadFile(s.getFilePath(FILE_NODE_LIST))
+	if err == nil && len(buf) > 0 {
+		list := s.decodeNodeList(buf, s.pcoder, s.scoder)
+		if len(list) > 0 {
+			s.nodes = list
+		}
+	}
 }
 
 func (s *SDKServer) DoCommandRequest(url string) (string, error) {
-	buf, err := s.DoHttpRequest(url)
+	buf, err := s.DoHttpRequestWithTimeout(url, time.Second*15)
 	if err != nil {
 		return "", err
 	}
@@ -105,7 +173,9 @@ func (s *SDKServer) DoCommandRequest(url string) (string, error) {
 	return cmd.Body, nil
 }
 
-func (s *SDKServer) BuildStringDecoder(src map[string]interface{}) map[int]string {
+func (s *SDKServer) BuildStringDecoder(buf []byte) map[int]string {
+	src := map[string]interface{}{}
+	json.Unmarshal(buf, &src)
 	ret := make(map[int]string)
 	for k, v := range src {
 		if rv, ok := v.(float64); ok {
@@ -115,61 +185,150 @@ func (s *SDKServer) BuildStringDecoder(src map[string]interface{}) map[int]strin
 	return ret
 }
 
-func (s *SDKServer) ParseNode(text string) error {
-	root := []map[string]interface{}{}
-	err := json.Unmarshal([]byte(text), &root)
-	if err != nil {
-		return err
+func (s *SDKServer) decodeNode(src []byte, pd map[int]string, bd map[int]string) *VPNNode {
+	node := &VPNNode{}
+	node.Address = net.IP(src[:4]).String()
+	node.Name = hex.EncodeToString(src[4:7])
+	node.Province = pd[int(uint32(src[7])&0x3f)]
+	node.Carrier = bd[int(uint32(src[7])>>6)]
+	node.City = bd[int(uint32(binary.BigEndian.Uint16(src[8:])))]
+	node.Port = defaultPort
+	return node
+}
+
+func (s *SDKServer) decodeNodeList(src []byte, pd map[int]string, bd map[int]string) []*VPNNode {
+	if len(src)%10 != 0 {
+		log.Println("buffer not align to 10")
+		return []*VPNNode{}
 	}
-	if len(root) < 2 {
-		return errors.New("invalid node list text")
-	}
-	decoder := s.BuildStringDecoder(root[0])
-	ret := []*VPNNode{}
-	for i := 1; i < len(root); i++ {
-		item := root[i]
-		if len(item) == 0 {
+	offset := 0
+	ret := make([]*VPNNode, len(src)/10)
+	i := 0
+	for {
+		if offset == len(src) {
 			break
 		}
-		n := &VPNNode{}
-		if v, ok := item["a"]; ok {
-			if rv, ok := v.(string); ok {
-				n.Name = rv
-			}
-		}
-		if v, ok := item["b"]; ok {
-			if rv, ok := v.(float64); ok {
-				n.Port = int(rv)
-			}
-		}
-		if v, ok := item["d"]; ok {
-			if rv, ok := v.(float64); ok {
-				n.Province = decoder[int(rv)]
-			}
-		}
-		if v, ok := item["f"]; ok {
-			if rv, ok := v.(float64); ok {
-				n.Carrier = decoder[int(rv)]
-			}
-		}
-		if v, ok := item["e"]; ok {
-			if rv, ok := v.(float64); ok {
-				n.City = decoder[int(rv)]
-			}
-		}
-		if v, ok := item["g"]; ok {
-			if rv, ok := v.(string); ok {
-				n.Address = rv
-			}
-		}
-		if len(n.Name) == 0 || len(n.Province) == 0 || len(n.City) == 0 {
-			continue
-		}
-		ret = append(ret, n)
+		item := s.decodeNode(src[offset:], pd, bd)
+		ret[i] = item
+		i++
+		offset += 10
 	}
-	s.nodes = ret
-	s.expire = time.Now().Add(time.Minute * 10)
+	return ret[:i]
+}
+
+func (s *SDKServer) DoUpdateCoder() error {
+	if !time.Now().After(s.coderExp) {
+		return nil
+	}
+	buf, err := s.DoHttpRequestWithTimeout(fmt.Sprintf(URL_P_CODER, CMNET_HOST), time.Second*15)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+	ioutil.WriteFile(s.getFilePath(FILE_P_CODER), buf, os.ModePerm)
+	s.pcoder = s.BuildStringDecoder(buf)
+
+	buf, err = s.DoHttpRequestWithTimeout(fmt.Sprintf(URL_S_CODER, CMNET_HOST), time.Second*15)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+	ioutil.WriteFile(s.getFilePath(FILE_S_CODER), buf, os.ModePerm)
+	s.scoder = s.BuildStringDecoder(buf)
+	s.coderExp = time.Now().Add(time.Minute * 20)
 	return nil
+}
+
+func (s *SDKServer) DoUpdateNodeList() error {
+	s.DoUpdateCoder()
+	if len(s.pcoder) == 0 {
+		return errors.New("Network error")
+	}
+	if !time.Now().After(s.listExp) {
+		return nil
+	}
+	url := fmt.Sprintf(URL_IP_LIST, CMNET_HOST) + "?email=" + s.conf.UserName + "&pass=" + s.conf.Password
+	buf, err := s.DoHttpRequestWithTimeout(url, time.Second*15)
+	if err != nil && !s.isHttpError(err) {
+		log.Println("update node list with network error ,try last active node")
+		if s.lastActiveNode != nil {
+			url = fmt.Sprintf(URL_IP_LIST, s.lastActiveNode.Address) + "?email=" + s.conf.UserName + "&pass=" + s.conf.Password
+			buf, err = s.DoHttpRequestWithTimeout(url, time.Second*15)
+		}
+		log.Println("update node list with network error ,try cached node list")
+		if err != nil && !s.isHttpError(err) {
+			for _, v := range s.nodes {
+				url = fmt.Sprintf(URL_IP_LIST, v.Address) + "?email=" + s.conf.UserName + "&pass=" + s.conf.Password
+				buf, err = s.DoHttpRequestWithTimeout(url, time.Second*15)
+				if err == nil || s.isHttpError(err) {
+					s.lastActiveNode = v
+					break
+				}
+			}
+		}
+	}
+	if err != nil || buf == nil || len(buf) == 0 {
+		return errors.New("Get Node List Error")
+	}
+	list := s.decodeNodeList(buf, s.pcoder, s.scoder)
+	if len(list) == 0 {
+		return errors.New("Node List empty")
+	}
+	ioutil.WriteFile(s.getFilePath(FILE_NODE_LIST), buf, os.ModePerm)
+	s.nodes = list
+	s.listExp = time.Now().Add(time.Minute * 8)
+	return nil
+}
+
+func (s *SDKServer) GetRealTimeAddress(name string) (string, error) {
+	url := fmt.Sprintf(URL_IP, CMNET_HOST) + "?email=" + s.conf.UserName + "&pass=" + s.conf.Password + "&name=" + name
+	buf, err := s.DoHttpRequestWithTimeout(url, time.Second*15)
+	if err != nil && !s.isHttpError(err) {
+		log.Println("get real time address with network error ,try last active node")
+		if s.lastActiveNode != nil {
+			url = fmt.Sprintf(URL_IP, s.lastActiveNode.Address) + "?email=" + s.conf.UserName + "&pass=" + s.conf.Password
+			buf, err = s.DoHttpRequestWithTimeout(url, time.Second*15)
+		}
+		log.Println("get real time address with network error ,try cached node list")
+		if err != nil && !s.isHttpError(err) {
+			for _, v := range s.nodes {
+				url = fmt.Sprintf(URL_IP, v.Address) + "?email=" + s.conf.UserName + "&pass=" + s.conf.Password
+				buf, err = s.DoHttpRequestWithTimeout(url, time.Second*15)
+				if err == nil || s.isHttpError(err) {
+					s.lastActiveNode = v
+					break
+				}
+			}
+		}
+	}
+	if err != nil || buf == nil || len(buf) == 0 {
+		return "", errors.New("network error")
+	}
+	ls := strings.Split(string(buf), ":")
+	if len(ls) != 2 {
+		return "", errors.New("invalid response")
+	}
+	return ls[0], nil
+}
+
+func (s *SDKServer) CheckIPIsUsed(Address string) (bool, error) {
+	url := fmt.Sprintf(URL_IP_CHECK, CMNET_HOST) + "user=" + s.conf.UserName + "&pass=" + s.conf.Password + "&ip=" + Address
+	buf, err := s.DoHttpRequestWithTimeout(url, time.Second*15)
+	if err != nil {
+		return false, err
+	}
+	return string(buf) == "1", nil
+}
+
+func (s *SDKServer) getLocalDefaultAddress() string {
+	con, err := net.Dial("tcp", "wwww.baidu.com:80")
+	if err != nil {
+		return "0.0.0.0"
+	}
+	defer con.Close()
+	addr := (con.(*net.TCPConn)).LocalAddr().String()
+	ls := strings.Split(addr, ":")
+	return ls[0]
 }
 
 // /bitip/login.do
@@ -184,12 +343,22 @@ func (s *SDKServer) HandleLogin(r *http.Request) ([]byte, error) {
 	conf.City = r.FormValue("city")
 	conf.Carrier = r.FormValue("carrier")
 
+	localAddr := s.getLocalDefaultAddress()
+	s.localip, _ = net.ResolveTCPAddr("tcp", localAddr+":0")
+
+	_, err := hex.DecodeString(conf.Password)
+	if err != nil || len(conf.Password) != 32 {
+		sh := md5.Sum([]byte(conf.Password))
+		conf.Password = hex.EncodeToString(sh[:])
+	}
+
 	conf.IgnoreUsedIP = (r.FormValue("ignoreusedip") == "true")
-	url := URL_LOGIN + "?" + "email=" + conf.UserName + "&pass=" + conf.Password
+	url := fmt.Sprintf(URL_LOGIN, CMNET_HOST) + "?" + "email=" + conf.UserName + "&pass=" + conf.Password
 	text, err := s.DoCommandRequest(url)
 	if err != nil {
 		return nil, err
 	}
+	s.cmnetip, _ = net.LookupHost(CMNET_HOST)
 	s.conf = conf
 	return []byte(text), err
 }
@@ -206,28 +375,12 @@ func (s *SDKServer) HandleOption(r *http.Request) ([]byte, error) {
 	return json.Marshal(s.conf)
 }
 
-func (s *SDKServer) updateVPNNode() error {
-	if time.Now().After(s.expire) {
-		url := URL_IP_LIST + "?" + "email=" + s.conf.UserName + "&pass=" + s.conf.Password
-		text, err := s.DoCommandRequest(url)
-		if err != nil {
-			return err
-		}
-		err = s.ParseNode(text)
-		if err != nil {
-			return err
-		}
-		return err
-	}
-	return nil
-}
-
 // /bitip/getnodelist.do
 func (s *SDKServer) HandleGetNodeList(r *http.Request) ([]byte, error) {
 	if s.conf == nil {
 		return nil, errors.New("user not login")
 	}
-	err := s.updateVPNNode()
+	err := s.DoUpdateNodeList()
 	if err != nil {
 		return nil, err
 	}
@@ -237,51 +390,27 @@ func (s *SDKServer) HandleGetNodeList(r *http.Request) ([]byte, error) {
 	return json.Marshal(s.nodes)
 }
 
-func (s *SDKServer) GetRealTimeAddress(name string) (string, int, error) {
-	url := URL_IP + "?" + "email=" + s.conf.UserName + "&pass=" + s.conf.Password + "&name=" + name
-	text, err := s.DoCommandRequest(url)
-	if err != nil {
-		return "", 0, err
-	}
-	ls := strings.Split(text, ":")
-	if len(ls) != 2 {
-		return "", 0, errors.New("invalid response")
-	}
-	port, err := strconv.Atoi(ls[1])
-	if err != nil {
-		return "", 0, err
-	}
-	return ls[0], port, nil
-}
-
-func (s *SDKServer) CheckIPIsUsed(Address string) (bool, error) {
-	url := URL_IP_CHECK + "?" + "user=" + s.conf.UserName + "&pass=" + s.conf.Password + "&ip=" + Address
-	buf, err := s.DoHttpRequest(url)
-	if err != nil {
-		return false, err
-	}
-	rsp := &CheckResponse{}
-	err = json.Unmarshal(buf, rsp)
-	if err != nil {
-		return false, err
-	}
-	return rsp.IsUsed, nil
-}
-
 // /bitip/changeip.do
 func (s *SDKServer) HandleChangeIP(r *http.Request) ([]byte, error) {
 	var node *VPNNode = nil
 	if s.conf == nil {
 		return nil, errors.New("user not login")
 	}
-	err := s.updateVPNNode()
+	err := s.DoUpdateNodeList()
 	if err != nil {
 		return nil, err
 	}
 	if len(s.nodes) == 0 {
 		return nil, errors.New("node unavaliable")
 	}
-	for i := s.index % len(s.nodes); i < len(s.nodes); i++ {
+	count := 0
+	for {
+		s.index++
+		count++
+		i := int(s.index % uint(len(s.nodes)))
+		if count > len(s.nodes) {
+			break
+		}
 		if len(s.conf.Province) != 0 {
 			if s.conf.Province != s.nodes[i].Province {
 				log.Println("Provice flt")
@@ -299,7 +428,7 @@ func (s *SDKServer) HandleChangeIP(r *http.Request) ([]byte, error) {
 				log.Println("carrier flt")
 			}
 		}
-		addr, port, err := s.GetRealTimeAddress(s.nodes[i].Name)
+		addr, err := s.GetRealTimeAddress(s.nodes[i].Name)
 		if err != nil {
 			log.Println("get realtime address failed:", err)
 			continue
@@ -313,8 +442,6 @@ func (s *SDKServer) HandleChangeIP(r *http.Request) ([]byte, error) {
 		}
 		node = s.nodes[i]
 		node.Address = addr
-		node.Port = port
-		s.index += i
 		break
 	}
 	if node == nil {
@@ -343,18 +470,23 @@ func (s *SDKServer) connect(n *VPNNode) error {
 		if err != nil {
 			return errors.New("failed to parse public key" + err.Error())
 		}
+		exp := make([]string, len(s.cmnetip))
+		for i, v := range s.cmnetip {
+			exp[i] = v + "/32"
+		}
 		conf := &ClientConfig{
 			UserName: s.conf.UserName,
 			Password: s.conf.Password,
 			DNS:      []string{"223.5.5.5", "223.6.6.6"},
-			Exclude:  []string{"120.39.243.128/32"},
+			Exclude:  exp,
 		}
-		s.con = &VPNConnector{
-			conf:   conf,
-			rasKey: puk.(*rsa.PublicKey),
+		s.con, err = NewConnector(conf, puk.(*rsa.PublicKey))
+		if err != nil {
+			s.con = nil
+			return err
 		}
 	}
-	return s.con.connectVPN(addr)
+	return s.con.Connect(addr)
 }
 
 func (o *SDKServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -376,9 +508,18 @@ func (o *SDKServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.EscapedPath() == "/bitip/options.do" {
 		buf, err = o.HandleOption(r)
 	}
+	if r.URL.EscapedPath() == "/bitip/status.do" {
+		err = nil
+		if o.con != nil && o.con.IsWorking() {
+			buf = []byte("connected")
+		} else {
+			buf = []byte("not connected")
+		}
+	}
 	if r.URL.EscapedPath() == "/bitip/shutdown.do" {
 		if o.con != nil {
-			o.con.close()
+			o.con.Close()
+			o.con = nil
 		}
 		err = nil
 		buf = []byte("ok")
