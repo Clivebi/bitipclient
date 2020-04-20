@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#161617</color>
+    <color name="viewBackground">#000000</color>
+    <color name="colorPrimaryDark">#161617</color>
+    <color name="colorAccent">#009688</color>
+    <color name="editBackground">#1A242E</color>
+    <color name="editText">#FFFFFF</color>
+    <color name="colorForeground">@android:color/darker_gray</color>
+    <color name="selectConfig">#212123</color>
+</resources>

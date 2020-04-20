@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.kaopuip.app.common.SwipeMenuLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="90dp"
+    android:background="@color/viewBackground"
+    android:clickable="true"
+    app:ios="true"
+    app:leftSwipe="true"
+    app:swipeEnable="true">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/config_backgroud">
+
+        <ImageView
+            android:id="@+id/header"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="16dp"
+            android:scaleType="fitXY"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:srcCompat="@drawable/ic_settings_black_24dp" />
+
+        <TextView
+            android:id="@+id/province"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="28dp"
+            android:layout_marginTop="8dp"
+            android:text="不限省份"
+            android:textColor="@color/editText"
+            app:layout_constraintStart_toEndOf="@+id/header"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <TextView
+            android:id="@+id/citycarrier"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="不限城市 不限运营商"
+            android:textColor="@color/editText"
+            app:layout_constraintStart_toStartOf="@+id/province"
+            app:layout_constraintTop_toBottomOf="@+id/province" />
+
+        <TextView
+            android:id="@+id/ignoreusedip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="开启全局IP去重"
+            android:textColor="@color/editText"
+            app:layout_constraintStart_toStartOf="@+id/citycarrier"
+            app:layout_constraintTop_toBottomOf="@+id/citycarrier" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <TextView
+        android:id="@+id/delete"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:background="#F44336"
+        android:clickable="true"
+        android:gravity="center"
+        android:paddingLeft="32dp"
+        android:paddingRight="32dp"
+        android:text="@string/title_delete"
+        android:textColor="@color/editText" />
+
+</com.kaopuip.app.common.SwipeMenuLayout>

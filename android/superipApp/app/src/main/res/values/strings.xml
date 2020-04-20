@@ -1,0 +1,42 @@
+<resources>
+    <string name="app_name">KaopuIP</string>
+    <string name="title_login">Login</string>
+    <string name="title_register">Register</string>
+    <string name="title_user">Phone</string>
+    <string name="title_password">Password</string>
+    <string name="title_forgotpassword">Forgot Password</string>
+    <string name="title_province">Province</string>
+    <string name="title_city">City</string>
+    <string name="title_carrier">Carrier</string>
+    <string name="title_ignore_used_ip">Ignore Used IP</string>
+    <string name="title_all">All</string>
+    <string name="title_delete">Delete</string>
+    <string name="title_unset_province">Province not set</string>
+    <string name="title_unset_city">City not set</string>
+    <string name="title_unset_carrier">Carrier not set</string>
+    <string name="title_unset_used_ip">Ignore used ip not set</string>
+    <string name="title_set_used_ip">Ignore use ip</string>
+    <string name="title_change_ip">Change IP</string>
+    <string name="title_exit">Exit</string>
+    <string name="title_goods_name">GoodsName</string>
+    <string name="title_price">Price</string>
+    <string name="title_check_out">Checkout</string>
+    <string name="title_invalid_input">Invalid Input</string>
+    <string name="title_wait">Please wait for the previous operation to complete</string>
+    <string name="title_select_config">Please chooise a config</string>
+    <string name="title_no_server_available">No server available</string>
+    <string name="format_device_count">Max device count %s</string>
+    <string name="format_expire">Expire at %s</string>
+    <string name="title_logout">Logout</string>
+    <string name="title_reset_password">ResetPassword</string>
+    <string name="title_send_pin">Send pin</string>
+    <string name="title_pin_code">Pin Code</string>
+    <string name="title_next">Next</string>
+    <string name="title_repassword">Repeat Password</string>
+    <string name="msg_connect_ok">Connect OK</string>
+    <string name="msg_connect_failed">Connect Failed</string>
+    <string name="error_network_error">Network Error</string>
+    <string name="wx_appid" translatable="false">1222222222222</string>
+    <string name="msg_payment_successful">Payment Successful</string>
+    <string name="msg_payment_failed">Payment failed</string>
+</resources>
