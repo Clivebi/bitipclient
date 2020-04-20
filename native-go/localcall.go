@@ -31,7 +31,7 @@ const (
 	URL_LOGIN      = "http://%v:6709/login.do"
 	URL_IP_LIST    = "http://%v:6709/getips2.do"
 	URL_IP         = "http://%v:6709/getip2.do"
-	URL_IP_CHECK   = "http://%v:6706/ipcheck.do"
+	URL_IP_CHECK   = "http://%v:6709/checkip.do"
 	defaultPort    = 8808
 )
 

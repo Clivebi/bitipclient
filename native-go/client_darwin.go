@@ -13,32 +13,25 @@ import (
 	"time"
 )
 
-type ClientConfig struct {
-	UserName  string   `json:"username"`
-	Password  string   `json:"password"`
-	DNS       []string `json:"dns"`
-	Exclude   []string `json:"exclude"`
-	LocalAddr net.Addr
-}
-
-type routeEntry struct {
-	address    string
-	viaAddress string
-}
-
-type OSSepcialSetup struct {
-	rollbackentrys       []routeEntry
-	defaultGateWay       string
-	defaultGateWayDevice string
-}
-
 type VPNConnector struct {
 	conf    *ClientConfig
-	rasKey  *rsa.PublicKey
+	rsaKey  *rsa.PublicKey
 	ifc     *water.Interface
 	Chiper  CryptBlock
 	special *OSSepcialSetup
 	con     net.Conn
+}
+
+func CheckEvn() error {
+	return nil
+}
+
+func NewConnector(conf *ClientConfig, rsaKey *rsa.PublicKey) (Connector, error) {
+	cn := &VPNConnector{
+		conf:   conf,
+		rsaKey: rsaKey,
+	}
+	return cn, nil
 }
 
 func (o *VPNConnector) close() {
@@ -49,6 +42,10 @@ func (o *VPNConnector) close() {
 	if o.con != nil {
 		o.con.Close()
 		o.con = nil
+	}
+	if o.ifc != nil {
+		o.ifc.Close()
+		o.ifc = nil
 	}
 }
 
@@ -77,15 +74,14 @@ func (o *VPNConnector) setupTunDevice(address string) error {
 	return o.special.Setup(o.ifc.Name(), "10.1.0.10/24", "10.1.0.1", 1500, o.conf.DNS, Exclude)
 }
 
-func (o *VPNConnector) connectVPN(address string) error {
+func (o *VPNConnector) IsWorking() bool {
+	return o.special != nil
+}
+
+func (o *VPNConnector) Connect(address string) error {
 	o.close()
-	err := o.setupTunDevice(address)
-	if err != nil {
-		return err
-	}
 	dial := net.Dialer{
-		Timeout:   time.Second * 15,
-		LocalAddr: o.conf.LocalAddr,
+		Timeout: time.Second * 5,
 	}
 	con, err := dial.Dial("tcp", address)
 	if err != nil {
@@ -106,7 +102,7 @@ func (o *VPNConnector) connectVPN(address string) error {
 	}
 	wbuf = bytes.NewBuffer(nil)
 	pro.WriteToIO(wbuf)
-	buf, err := rsa.EncryptPKCS1v15(rand.Reader, o.rasKey, wbuf.Bytes())
+	buf, err := rsa.EncryptPKCS1v15(rand.Reader, o.rsaKey, wbuf.Bytes())
 	if err != nil {
 		o.close()
 		return err
@@ -130,10 +126,19 @@ func (o *VPNConnector) connectVPN(address string) error {
 		o.close()
 		return err
 	}
+	err = o.setupTunDevice(address)
+	if err != nil {
+		o.close()
+		return err
+	}
 	go o.copyLocalToRemote(con)
 	go o.copyRemoteToLocal(con)
 	o.con = con
 	return nil
+}
+
+func (o *VPNConnector) Close() {
+	o.close()
 }
 
 func (o *VPNConnector) copyLocalToRemote(con net.Conn) {

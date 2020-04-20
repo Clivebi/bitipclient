@@ -125,6 +125,7 @@ func (o *OSSepcialSetup) Rollback() {
 		}
 	}
 	o.exec("route", []string{"add", "default", o.defaultGateWay})
+	o.setDefaultGateway(o.defaultGateWayDevice, o.defaultGateWay)
 }
 
 func (o *OSSepcialSetup) Setup(ifName, address, gateway string, mtu int, dns []string, exclude []string) error {

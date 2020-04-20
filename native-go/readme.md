@@ -5,7 +5,7 @@ bitip golang 连接内核
 通过http接口控制，有如下几个接口  
   
 登录，只有先调用了这个接口，其它功能才能使用  
-127.0.0.1:8978/bitip/login.do?username=18503002078&password=x 
+127.0.0.1:8978/bitip/login.do?username=yyy&password=x 
 参数:  
 username 	 账号名  
 password 	 密码  
