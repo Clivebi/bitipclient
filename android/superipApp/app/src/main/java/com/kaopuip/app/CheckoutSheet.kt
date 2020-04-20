@@ -13,7 +13,6 @@ import com.kaopuip.app.common.WaitingDialog.endWaitingDialog
 import com.kaopuip.app.common.WaitingDialog.showWaitingDialog
 import com.kaopuip.app.common.app
 import com.kaopuip.app.common.readHttpText
-import com.kaopuip.app.R.*
 import com.alipay.sdk.app.EnvUtils
 import com.google.gson.Gson
 import com.kaopuip.core.UserInfo
@@ -43,7 +42,7 @@ class CheckoutSheet(context: Context,goods: GoodsActivity.GoodsItem){
             context.showWaitingDialog("处理中")
             doAsync {
                 val info =
-                    readHttpText("$ALI_ORDER_INFO_URL?email=${app().mStorage.getLoginInfo()!!.user}&goodname=${goods.Name}")
+                    readHttpText("$ALI_ORDER_INFO_URL?email=${app().mAPIProvider.getLoginInfo()!!.user}&goodname=${goods.Name}")
                 if(info.isEmpty()){
                     uiThread {
                         context.endWaitingDialog()
@@ -65,7 +64,7 @@ class CheckoutSheet(context: Context,goods: GoodsActivity.GoodsItem){
             context.showWaitingDialog("处理中")
             doAsync {
                 val info =
-                    readHttpText("$WX_ORDER_INFO_URL?email=$${app().mStorage.getLoginInfo()!!.user}&goodname=${goods.Name}")
+                    readHttpText("$WX_ORDER_INFO_URL?email=$${app().mAPIProvider.getLoginInfo()!!.user}&goodname=${goods.Name}")
                 if(info.isEmpty()){
                     uiThread {
                         context.endWaitingDialog()
@@ -117,7 +116,7 @@ class CheckoutSheet(context: Context,goods: GoodsActivity.GoodsItem){
         if(result["resultStatus"] == "9000"){
             context.toast(R.string.msg_payment_successful)
             doAsync {
-                val info = app().mStorage.updateUserInfo()
+                val info = app().mAPIProvider.updateUserInfo()
                 uiThread {
                     if (info != null &&mUserInfoUpdateCallback!=null){
                         mUserInfoUpdateCallback?.let { it1 -> it1(info) }

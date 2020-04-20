@@ -8,11 +8,11 @@ import android.content.IntentFilter
 import android.net.VpnService
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.os.Parcelable
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageView
 import android.widget.TextView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.recyclerview.widget.DefaultItemAnimator
@@ -20,10 +20,10 @@ import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.kaopuip.app.common.*
-import com.kaopuip.core.IPAddress
 import com.kaopuip.core.LocalVpnService
 import com.kaopuip.core.ServerAPIProvider
 import com.kaopuip.core.VPNNode
+import kotlinx.android.parcel.Parcelize
 import kotlinx.android.synthetic.main.activity_main.*
 import org.jetbrains.anko.doAsync
 import org.jetbrains.anko.startActivity
@@ -38,15 +38,17 @@ class MainActivity : AppCompatActivity(),
     companion object{
         private const val VPN_REQUEST_CODE = 0x0F
         const val TAG = "MainActivity"
+        const val CONFIG_FILE_NAME = "config.conf"
     }
-    private var mSelected:Int = -1
     private var mIsConnected:Boolean = false
     private val mAdapter: ConfigListAdapter = ConfigListAdapter()
     private val mReceiver: ServiceStartActionReceiver = ServiceStartActionReceiver()
     private var mIsConnecting = false
     private var mCurrentID = Date().toString()
     private var mNode: VPNNode = VPNNode("","",0,"","","")
-    private var mConfigs:ArrayList<ServerAPIProvider.IPSelector> = arrayListOf()
+    private lateinit  var mSelectConfig:SelectorConfig
+    @Parcelize
+    private class SelectorConfig(val dataList:ArrayList<ServerAPIProvider.IPSelector>,var select:Int):Parcelable{}
     inner class ServiceStartActionReceiver : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent){
             val id = intent.getStringExtra(LocalVpnService.KEY_START_ID)
@@ -61,13 +63,14 @@ class MainActivity : AppCompatActivity(),
                 status.text = status.text.toString()+" "+getString(R.string.msg_connect_ok)
             }else{
                 changeIP.isSelected = false
+                exit.visibility = View.GONE
                 status.text = status.text.toString()+" "+getString(R.string.msg_connect_failed)
             }
         }
     }
     inner class ConfigListAdapter: RecyclerView.Adapter<ConfigListAdapter.ViewHolder>(){
         override fun getItemCount(): Int {
-            return mConfigs.size
+            return mSelectConfig.dataList.size
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -81,31 +84,32 @@ class MainActivity : AppCompatActivity(),
             payloads: MutableList<Any>
         ) {
             super.onBindViewHolder(holder, position, payloads)
-            holder.container.isSelected = (mSelected == position)
+            holder.container.isSelected = (mSelectConfig.select == position)
         }
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val layout = holder.itemView as SwipeMenuLayout
-            val data = mConfigs[position]
+            val data = mSelectConfig.dataList[position]
             layout.isIos = true
             layout.isSwipeEnable = true
             holder.delete.text = getString(R.string.title_delete)
             holder.title.text = getTitle(data)
             holder.subtitle.text = getSubtitle(data)
             holder.subtitle2.text = getSubtitle2(data)
-            holder.container.isSelected = (mSelected == position)
+            holder.container.isSelected = (mSelectConfig.select == position)
             holder.container.setOnClickListener {
-                val old = mSelected
+                val old = mSelectConfig.select
                 holder.container.isSelected = true
-                mSelected = position
+                mSelectConfig.select = position
                 if (old != -1){
                     notifyItemChanged(old,"view")
                 }
                 notifyItemChanged(position,"view")
             }
             holder.delete.setOnClickListener {
-                mConfigs.removeAt(position)
+                mSelectConfig.dataList.removeAt(position)
                 this.notifyItemRemoved(position)
+                Storage(this@MainActivity).saveObject(CONFIG_FILE_NAME,mSelectConfig)
             }
         }
 
@@ -138,7 +142,6 @@ class MainActivity : AppCompatActivity(),
         }
         inner class ViewHolder(view: View): RecyclerView.ViewHolder(view){
             var container: ConstraintLayout =view.findViewById(R.id.container)
-            var header: ImageView =view.findViewById(R.id.header)
             var title: TextView =view.findViewById(R.id.province)
             var subtitle: TextView =view.findViewById(R.id.citycarrier)
             var subtitle2: TextView =view.findViewById(R.id.ignoreusedip)
@@ -150,17 +153,24 @@ class MainActivity : AppCompatActivity(),
         super.onCreate(savedInstanceState)
         translucentActionBar()
         setContentView(R.layout.activity_main)
-        if(null == app().mStorage.getLoginInfo()){
+        if(null == app().mAPIProvider.getLoginInfo()){
             startActivity<LoginActivity>()
             finishAffinity()
         }
-        mConfigs.add(ServerAPIProvider.IPSelector("","","",false))
+        //mConfigs.add(ServerAPIProvider.IPSelector("","","",false))
+        val configs = Storage(this).loadObject<SelectorConfig>(CONFIG_FILE_NAME,SelectorConfig::class.java.classLoader)
+        if(configs != null && configs.dataList.isEmpty()){
+            mSelectConfig = configs
+        }else{
+            mSelectConfig = SelectorConfig(arrayListOf(),0)
+            mSelectConfig.dataList.add(ServerAPIProvider.IPSelector("","","",true))
+        }
         registerReceiver(mReceiver, IntentFilter(LocalVpnService.VPN_SERVICE_ACTION_RESULT))
         toolbar.layoutParams.height += statusBarHeight()
         toolbar.requestLayout()
         moreview.setOnClickListener {
             doAsync {
-                app().mStorage.getNodeList()
+                app().mAPIProvider.getNodeList()
                 uiThread {
                     ConfigSheet(this@MainActivity).setListener(this@MainActivity).dialog().show()
                 }
@@ -185,7 +195,7 @@ class MainActivity : AppCompatActivity(),
             startActivity<GoodsActivity>()
         }
         doAsync {
-            app().mStorage.updateUserInfo()
+            app().mAPIProvider.updateUserInfo()
         }
     }
 
@@ -224,12 +234,15 @@ class MainActivity : AppCompatActivity(),
         if (config.carrier == getString(R.string.title_all)){
             config.carrier = ""
         }
-        val count = mConfigs.size
-        mConfigs.add(config)
+        val count = mSelectConfig.dataList.size
+        mSelectConfig.dataList.add(config)
         mAdapter.notifyItemInserted(count)
+        Storage(this).saveObject(CONFIG_FILE_NAME,mSelectConfig)
     }
 
     private fun stopVPN(){
+        exit.visibility = View.GONE
+        changeIP.isSelected = false
         LocalVpnService.stopVPNService(this)
     }
 
@@ -238,9 +251,9 @@ class MainActivity : AppCompatActivity(),
         if (intent!=null){
             startActivityForResult(intent,
                 VPN_REQUEST_CODE
-            );
+            )
         }else{
-            onActivityResult(VPN_REQUEST_CODE, Activity.RESULT_OK, null);
+            onActivityResult(VPN_REQUEST_CODE, Activity.RESULT_OK, null)
         }
     }
     private fun startVPN(){
@@ -249,7 +262,7 @@ class MainActivity : AppCompatActivity(),
             return
         }
         stopVPN()
-        if(mSelected == -1 || mSelected+1 > mConfigs.size){
+        if(mSelectConfig.select > mSelectConfig.dataList .size){
             toast(R.string.title_select_config)
             return
         }
@@ -257,11 +270,11 @@ class MainActivity : AppCompatActivity(),
         mIsConnecting = true
         mIsConnected  = false
         mCurrentID = Date().toString()
-        val selector = mConfigs[mSelected]
+        val selector = mSelectConfig.dataList[mSelectConfig.select]
         doAsync {
             var ret:VPNNode? = null
             try {
-                ret = app().mStorage.selectOneNode(selector)
+                ret = app().mAPIProvider.selectOneNode(selector)
             }catch (exp:Exception){
                 exp.printStackTrace()
             }
@@ -283,8 +296,8 @@ class MainActivity : AppCompatActivity(),
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == VPN_REQUEST_CODE && resultCode== Activity.RESULT_OK){
             LocalVpnService.startVPNService(this,LocalVpnService.CommandParameter(
-                app().mStorage.getLoginInfo()!!.user,
-                app().mStorage.getLoginInfo()!!.key,
+                app().mAPIProvider.getLoginInfo()!!.user,
+                app().mAPIProvider.getLoginInfo()!!.key,
                 mNode.address,
                 mNode.port,
                 packageName

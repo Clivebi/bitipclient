@@ -1,6 +1,7 @@
 package com.kaopuip.core
 
 import android.os.Parcelable
+import android.util.Log
 import java.net.URL
 import com.google.gson.Gson
 import com.google.gson.JsonObject
@@ -98,15 +99,15 @@ internal  class ServerAPI(var serverAddress: IPAddress) {
         ): VPNNode {
             val ip = String.format(
                 "%d.%d.%d.%d",
-                src[offset].toInt(),
-                src[offset + 1].toInt(),
-                src[offset + 2].toInt(),
-                src[offset + 3].toInt()
+                src[offset].toInt() and 0xff,
+                src[offset + 1].toInt() and 0xff,
+                src[offset + 2].toInt() and 0xff,
+                src[offset + 3].toInt() and 0xff
             )
             val name = src.hexString(offset + 4, 3)
             val province = src[offset + 7].toInt() and 0x3f
             val carrier = (src[offset + 7].toInt() and 0xff) shr 6
-            val city = (src[8].toInt() shl 8) + src[9].toInt()
+            val city = (src[offset+8].toInt() shl 8) + src[offset+9].toInt()
             return VPNNode(
                 name,
                 ip,

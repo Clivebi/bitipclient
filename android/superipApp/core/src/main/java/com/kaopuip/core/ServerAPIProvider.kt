@@ -211,10 +211,9 @@ class ServerAPIProvider(private  val context: Context) {
 
     fun selectOneNode(selector:IPSelector):VPNNode?{
         updateServerList(false)
-        var index = System.currentTimeMillis().toInt() and 0xFFFF
         for (i in 0 until mNodeList.size){
-            index++
-            val v = mNodeList[index%mNodeList.size]
+            selectSeed++
+            val v = mNodeList[selectSeed%mNodeList.size]
             if (selector.province.isNotEmpty() && selector.province != v.province){
                 continue
             }
@@ -454,5 +453,6 @@ class ServerAPIProvider(private  val context: Context) {
 
         var  defaultAddress:String = "cmnet.kaopuip.com"
         var  defaultPort:Int = 6709
+        private var selectSeed:Int = System.currentTimeMillis().toInt() and 0xFFFF
     }
 }
