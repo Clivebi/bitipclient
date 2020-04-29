@@ -10,6 +10,7 @@ import (
 	"log"
 	mrand "math/rand"
 	"net"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -36,6 +37,15 @@ func CheckEvn() error {
 	log.Println(water.Name())
 	water.Close()
 	return nil
+}
+
+func FixNetwork() {
+	cmd := exec.Command("ipconfig", "/renew", "/s")
+	buf, err := cmd.Output()
+	if err != nil {
+		log.Println("Command failed: ", string(GB2312toUTF8(buf)))
+	}
+	log.Println(string(GB2312toUTF8(buf)))
 }
 
 func NewConnector(conf *ClientConfig, rsaKey *rsa.PublicKey) (Connector, error) {
@@ -75,7 +85,6 @@ func (o *VPNConnector) Close() {
 		o.ifc.Close()
 	}
 	close(o.tunOutput)
-	close(o.tunInput)
 	AddIncludeTableEntry("0.0.0.0/0")
 }
 
@@ -151,6 +160,7 @@ func (o *VPNConnector) readTUNLoop() {
 	defer func() {
 		AddExcludeTableEntry("0.0.0.0/0")
 		o.working = false
+		close(o.tunInput)
 	}()
 
 	for {
@@ -235,12 +245,14 @@ func (o *VPNConnector) Connect(address string) error {
 	go o.moveRemoteToLocal(con, chiper, ech)
 	AddIncludeTableEntry("0.0.0.0/0")
 	o.con = con
+	o.working = true
 	return nil
 }
 
 func (o *VPNConnector) moveLocaltoRemote(con net.Conn, chiper CryptBlock, ech chan error) {
 	defer func() {
 		o.wg.Done()
+		o.working = false
 	}()
 	for {
 		select {

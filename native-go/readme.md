@@ -5,7 +5,7 @@ bitip golang 连接内核
 通过http接口控制，有如下几个接口  
   
 登录，只有先调用了这个接口，其它功能才能使用  
-127.0.0.1:8978/bitip/login.do?username=yyy&password=x 
+127.0.0.1:8978/bitip/login.do?username=手机号码&password=密码
 参数:  
 username 	 账号名  
 password 	 密码  
@@ -31,3 +31,8 @@ city	     只使用这个指定的城市
 127.0.0.1:8978/bitip/shutdown.do  
 参数：  
 无  
+
+查询状态
+127.0.0.1:8978/bitip/status.do
+参数：  
+无 
