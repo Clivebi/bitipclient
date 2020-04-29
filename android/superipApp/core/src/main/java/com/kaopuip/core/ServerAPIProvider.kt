@@ -283,6 +283,8 @@ class ServerAPIProvider(private  val context: Context) {
                 )
                 mProvinceCoder = ServerAPI.StringCoder(result.content!!.toString(Charsets.UTF_8))
                 mTimestamp.stringCoder = Date()
+            }else{
+                Log.d(TAG,"update pcoder error ${result.msg}")
             }
             result = api.getStringCoderText()
             if (result.status == 0 &&  result.content!=null&& result.content!!.isNotEmpty()){
@@ -291,6 +293,9 @@ class ServerAPIProvider(private  val context: Context) {
                 )
                 mStringCoder = ServerAPI.StringCoder(result.content!!.toString(Charsets.UTF_8))
                 mTimestamp.stringCoder = Date()
+            }
+            else{
+                Log.d(TAG,"update scoder error ${result.msg}")
             }
         }
     }
@@ -321,6 +326,8 @@ class ServerAPIProvider(private  val context: Context) {
                     NODE_LIST_FILE_NAME
                 )
                 return true
+            }else{
+                Log.d(TAG,"update nodelist error ${rsp.msg}")
             }
             if (rsp.status == ServerAPI.NetworkError){
                 if(mLastActiveAddress.isNotEmpty()){

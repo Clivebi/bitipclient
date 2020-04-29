@@ -13,6 +13,7 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.recyclerview.widget.DefaultItemAnimator
@@ -85,6 +86,11 @@ class MainActivity : AppCompatActivity(),
         ) {
             super.onBindViewHolder(holder, position, payloads)
             holder.container.isSelected = (mSelectConfig.select == position)
+            if (position == mSelectConfig.select){
+                holder.checked.visibility = View.VISIBLE
+            }else{
+                holder.checked.visibility = View.INVISIBLE
+            }
         }
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
@@ -110,6 +116,11 @@ class MainActivity : AppCompatActivity(),
                 mSelectConfig.dataList.removeAt(position)
                 this.notifyItemRemoved(position)
                 Storage(this@MainActivity).saveObject(CONFIG_FILE_NAME,mSelectConfig)
+            }
+            if (position == mSelectConfig.select){
+                holder.checked.visibility = View.VISIBLE
+            }else{
+                holder.checked.visibility = View.INVISIBLE
             }
         }
 
@@ -146,6 +157,7 @@ class MainActivity : AppCompatActivity(),
             var subtitle: TextView =view.findViewById(R.id.citycarrier)
             var subtitle2: TextView =view.findViewById(R.id.ignoreusedip)
             var delete: TextView =view.findViewById(R.id.delete)
+            var checked:ImageView = view.findViewById(R.id.checked)
         }
     }
 

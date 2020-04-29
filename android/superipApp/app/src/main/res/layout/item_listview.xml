@@ -57,6 +57,18 @@
             android:textColor="@color/editText"
             app:layout_constraintStart_toStartOf="@+id/citycarrier"
             app:layout_constraintTop_toBottomOf="@+id/citycarrier" />
+
+        <ImageView
+            android:id="@+id/checked"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="16dp"
+            android:tint="@color/editText"
+            android:tintMode="src_in"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:srcCompat="@drawable/ic_check_black_24dp" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 
     <TextView
