@@ -75,8 +75,8 @@ class GoodsActivity : AppCompatActivity(){
         toolbar.requestLayout()
         moreview.setOnClickListener {
         }
-        name.text = app().mAPIProvider.getLoginInfo()!!.user
-        val info = app().mAPIProvider.getUserInfo()
+        name.text = app().api.getLoginInfo()!!.user
+        val info = app().api.getUserInfo()
         if(info != null){
             devicecount.text = getString(R.string.format_device_count,info.ipsize)
             expire.text = getString(R.string.format_expire,info.expire)
@@ -117,7 +117,7 @@ class GoodsActivity : AppCompatActivity(){
             }
         }
         logout.setOnClickListener {
-            app().mAPIProvider.cleanLoginInfo()
+            app().api.cleanLoginInfo()
             startActivity<LoginActivity>()
             finishAffinity()
         }

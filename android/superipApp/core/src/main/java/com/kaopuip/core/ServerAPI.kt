@@ -1,7 +1,6 @@
 package com.kaopuip.core
 
 import android.os.Parcelable
-import android.util.Log
 import java.net.URL
 import com.google.gson.Gson
 import com.google.gson.JsonObject
@@ -13,6 +12,14 @@ import java.net.HttpURLConnection
 
 class ResultWithError<T>(val status: Int, val msg: String, val content: T)
 data class IPAddress(val address: String, val port: Int)
+
+/**
+ * @param name  用户名
+ * @param expire 过期时间
+ * @param ipsize 同时登陆用户数
+ * @param ustatus 状态 1 为禁用
+ * @param utype 账户类型，保留使用
+ */
 @Parcelize
 data class UserInfo(
     val name: String,  //用户账户
@@ -22,6 +29,15 @@ data class UserInfo(
     val utype: String //用户账户，类型，1共享IP，2独享IP
 ): Parcelable
 
+/**
+ * @param name 机器ID
+ * @param address 机器的当前端口，地址和端口可能随时会改变，连接前用getRealTimeAddress获取最新地址
+ * @param port 端口
+ * @param province IP所在省份
+ * @param city IP所在城市
+ * @param carrier IP运营商
+ */
+@Parcelize
 data class VPNNode(
     val name: String,     //机器GUID
     var address: String,  //机器的当前地址
@@ -29,7 +45,7 @@ data class VPNNode(
     val province: String, //IP所在省份
     val city: String,     //IP所在城市
     val carrier: String   //IP运营商
-)
+): Parcelable
 
 internal  class ServerAPI(var serverAddress: IPAddress) {
     private data class InternalResponse(val status: Int, val message: String, val body: String)
@@ -66,16 +82,13 @@ internal  class ServerAPI(var serverAddress: IPAddress) {
         private  const val URL_RESETPASSWORD = "http://%s:%d/resetpassword.do"
 
         //网络错误，连接失败或者超时，需要尝试下一个服务器
-        const val NetworkError = 100
         const val NetworkErrorText = "Network error"
-        //协议错误，用户认证错误等，不需要尝试其它服务器了
-        const val ProtocolError = 101
         //默认端口
-        const val defaultPort = 8808
+        private const val defaultPort = 8808
         //连接超时
-        var       connectTimeout = 1000*5
+        var       connectTimeout = 1000*2
         //读取数据超时，单位s
-        var       readTimeout = 1000*30
+        var       readTimeout = 1000*15
         //重试次数
         var       retryCount = 2
 
@@ -145,27 +158,6 @@ internal  class ServerAPI(var serverAddress: IPAddress) {
             return ret
         }
 
-        /*
-        解析服务器列表
-        */
-        fun parseServerList(
-            src: ByteArray,
-            provinceCoderText: String,
-            stringCoderText: String
-        ): Array<VPNNode> {
-            val pCoder = StringCoder(
-                provinceCoderText
-            )
-            val coder = StringCoder(
-                stringCoderText
-            )
-            return decodeNodeList(
-                src,
-                pCoder,
-                coder
-            ).toTypedArray()
-        }
-
         fun parseServerList(
             src: ByteArray,
             provinceCoder: StringCoder,
@@ -182,7 +174,7 @@ internal  class ServerAPI(var serverAddress: IPAddress) {
 
 
     private fun readHttpBytes(urlText: String): ResultWithError<ByteArray?> {
-        var result:ByteArray?
+        val result:ByteArray?
         for (i in 0..retryCount) {
             try {
                 val url = URL(urlText)
@@ -214,7 +206,7 @@ internal  class ServerAPI(var serverAddress: IPAddress) {
                     }
                     httpConnection.disconnect()
                     ResultWithError(
-                        ProtocolError,
+                        Error.ProtocolError.raw,
                         errorMessage,
                         null
                     )
@@ -224,12 +216,11 @@ internal  class ServerAPI(var serverAddress: IPAddress) {
             }
         }
         return ResultWithError(
-            NetworkError,
+            Error.NetworkError.raw,
             NetworkErrorText,
             null
         )
     }
-
 
     fun sendPin(phone:String,type:String): ResultWithError<Boolean> {
         val resp = readHttpBytes("${String.format(URL_SEND_PIN,serverAddress.address, serverAddress.port)}?email=$phone&type=$type")

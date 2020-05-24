@@ -36,7 +36,8 @@
     <string name="msg_connect_ok">Connect OK</string>
     <string name="msg_connect_failed">Connect Failed</string>
     <string name="error_network_error">Network Error</string>
-    <string name="wx_appid" translatable="false">1222222222222</string>
+    <string name="wx_appid" translatable="false">wx5ccf96b153886813</string>
     <string name="msg_payment_successful">Payment Successful</string>
     <string name="msg_payment_failed">Payment failed</string>
+    <string name="msg_disconnected">Disconnected</string>
 </resources>

@@ -26,6 +26,8 @@ func CheckEvn() error {
 	return nil
 }
 
+func FixNetwork() {
+}
 func NewConnector(conf *ClientConfig, rsaKey *rsa.PublicKey) (Connector, error) {
 	cn := &VPNConnector{
 		conf:   conf,

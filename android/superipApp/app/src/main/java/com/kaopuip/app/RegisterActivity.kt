@@ -134,7 +134,7 @@ class RegisterActivity : AppCompatActivity(),TextWatcher {
                     mUser = text
                     button.visibility = View.INVISIBLE
                     doAsync {
-                        val rsp = app().mAPIProvider .sendPin(mUser,type)
+                        val rsp = app().api .sendPin(mUser,type)
                         uiThread {
                             if (rsp.status !=0){
                                 toast(rsp.msg)
@@ -171,9 +171,9 @@ class RegisterActivity : AppCompatActivity(),TextWatcher {
                     button.visibility = View.INVISIBLE
                     doAsync {
                         val rsp = if (mRegister){
-                             app().mAPIProvider.register(mUser,mKey,mPin)
+                             app().api.register(mUser,mKey,mPin)
                         }else{
-                            app().mAPIProvider.resetPassword(mUser,mKey,mPin)
+                            app().api.resetPassword(mUser,mKey,mPin)
                         }
                         uiThread {
                             if (rsp.status !=0){

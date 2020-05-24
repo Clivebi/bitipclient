@@ -16,12 +16,14 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.core.graphics.drawable.toBitmap
 import androidx.recyclerview.widget.DefaultItemAnimator
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.kaopuip.app.common.*
 import com.kaopuip.core.LocalVpnService
+import com.kaopuip.core.ResultWithError
 import com.kaopuip.core.ServerAPIProvider
 import com.kaopuip.core.VPNNode
 import kotlinx.android.parcel.Parcelize
@@ -43,29 +45,51 @@ class MainActivity : AppCompatActivity(),
     }
     private var mIsConnected:Boolean = false
     private val mAdapter: ConfigListAdapter = ConfigListAdapter()
-    private val mReceiver: ServiceStartActionReceiver = ServiceStartActionReceiver()
+    private val mReceiver: ServiceStateListener = ServiceStateListener()
     private var mIsConnecting = false
     private var mCurrentID = Date().toString()
     private var mNode: VPNNode = VPNNode("","",0,"","","")
     private lateinit  var mSelectConfig:SelectorConfig
     @Parcelize
     private class SelectorConfig(val dataList:ArrayList<ServerAPIProvider.IPSelector>,var select:Int):Parcelable{}
-    inner class ServiceStartActionReceiver : BroadcastReceiver() {
+
+    inner class ServiceStateListener : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent){
+            val state = intent.getIntExtra(LocalVpnService.KEY_SATE_VALUE,100)
             val id = intent.getStringExtra(LocalVpnService.KEY_START_ID)
-            val result = intent.getStringExtra(LocalVpnService.KEY_START_ERROR)
-            if (id == mCurrentID){
-                mIsConnecting = false
-            }
-            if (result == "connect ok"){
-                mIsConnected = true
-                changeIP.isSelected = true
-                exit.visibility = View.VISIBLE
-                status.text = status.text.toString()+" "+getString(R.string.msg_connect_ok)
-            }else{
-                changeIP.isSelected = false
-                exit.visibility = View.GONE
-                status.text = status.text.toString()+" "+getString(R.string.msg_connect_failed)
+            when(state){
+                LocalVpnService.STATE_CONNECTING->{
+                    return
+                }
+                LocalVpnService.STATE_CONNECT_OK->{
+                    if (id == mCurrentID){
+                        mIsConnecting = false
+                        mIsConnected = true
+                        changeIP.isSelected = true
+                        exit.visibility = View.VISIBLE
+                        status.text = status.text.toString()+" "+getString(R.string.msg_connect_ok)
+                    }
+                }
+                LocalVpnService.STATE_CONNECT_FAILED->{
+                    val error = intent.getStringExtra(LocalVpnService.KEY_START_ERROR)
+                    if (id == mCurrentID){
+                        mIsConnecting = false
+                        mIsConnected = false
+                        changeIP.isSelected = false
+                        exit.visibility = View.GONE
+                        status.text = status.text.toString()+" "+getString(R.string.msg_connect_failed)
+                        if (error != null){
+                            toast(error)
+                        }
+                    }
+                }
+                LocalVpnService.STATE_DISCONNECTED->{
+                    mIsConnecting = false
+                    mIsConnected = true
+                    changeIP.isSelected = false
+                    exit.visibility = View.GONE
+                    status.text = getString(R.string.msg_disconnected)
+                }
             }
         }
     }
@@ -146,7 +170,7 @@ class MainActivity : AppCompatActivity(),
             return "$city $carrier"
         }
         private  fun getSubtitle2(src: ServerAPIProvider.IPSelector):String {
-            if (!src.ignoreUsedIP){
+            if (!src.skipUsedIP){
                 return this@MainActivity.getString(R.string.title_unset_used_ip)
             }
             return this@MainActivity.getString(R.string.title_set_used_ip)
@@ -165,7 +189,7 @@ class MainActivity : AppCompatActivity(),
         super.onCreate(savedInstanceState)
         translucentActionBar()
         setContentView(R.layout.activity_main)
-        if(null == app().mAPIProvider.getLoginInfo()){
+        if(null == app().api.getLoginInfo()){
             startActivity<LoginActivity>()
             finishAffinity()
         }
@@ -177,12 +201,12 @@ class MainActivity : AppCompatActivity(),
             mSelectConfig = SelectorConfig(arrayListOf(),0)
             mSelectConfig.dataList.add(ServerAPIProvider.IPSelector("","","",true))
         }
-        registerReceiver(mReceiver, IntentFilter(LocalVpnService.VPN_SERVICE_ACTION_RESULT))
+        registerReceiver(mReceiver, IntentFilter(LocalVpnService.ACTION_VPN_STATE_CHANGED))
         toolbar.layoutParams.height += statusBarHeight()
         toolbar.requestLayout()
         moreview.setOnClickListener {
             doAsync {
-                app().mAPIProvider.getNodeList()
+                app().api.getNodeList()
                 uiThread {
                     ConfigSheet(this@MainActivity).setListener(this@MainActivity).dialog().show()
                 }
@@ -207,7 +231,7 @@ class MainActivity : AppCompatActivity(),
             startActivity<GoodsActivity>()
         }
         doAsync {
-            app().mAPIProvider.updateUserInfo()
+            app().api.updateUserInfo()
         }
     }
 
@@ -284,19 +308,23 @@ class MainActivity : AppCompatActivity(),
         mCurrentID = Date().toString()
         val selector = mSelectConfig.dataList[mSelectConfig.select]
         doAsync {
-            var ret:VPNNode? = null
+            val result:ResultWithError<VPNNode?>
             try {
-                ret = app().mAPIProvider.selectOneNode(selector)
+                result = app().api.selectOneNode(selector)
             }catch (exp:Exception){
                 exp.printStackTrace()
+                mIsConnecting = false
+                mIsConnected = false
+                toast(R.string.title_no_server_available)
+                return@doAsync
             }
             uiThread {
-                if(ret==null){
-                    mIsConnecting = false
-                    mIsConnected = false
-                    toast(R.string.title_no_server_available)
+                mIsConnecting = false
+                mIsConnected = false
+                if (result.status != 0){
+                    toast(result.msg)
                 }else{
-                    mNode = ret
+                    mNode = result.content!!
                     status.text = "${mNode.province} ${mNode.city} ${mNode.carrier} ${mNode.address} "
                     startService()
                 }
@@ -308,12 +336,10 @@ class MainActivity : AppCompatActivity(),
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == VPN_REQUEST_CODE && resultCode== Activity.RESULT_OK){
             LocalVpnService.startVPNService(this,LocalVpnService.CommandParameter(
-                app().mAPIProvider.getLoginInfo()!!.user,
-                app().mAPIProvider.getLoginInfo()!!.key,
-                mNode.address,
-                mNode.port,
-                packageName
-            ),mCurrentID)
+                app().api.getLoginInfo()!!.user,
+                app().api.getLoginInfo()!!.key,
+                mNode,
+                packageName),mCurrentID, LocalVpnService.UIOption(getDrawable(R.drawable.ic_launcher_round)!!.toBitmap()))
             return
         }
         if(resultCode == VPN_REQUEST_CODE){

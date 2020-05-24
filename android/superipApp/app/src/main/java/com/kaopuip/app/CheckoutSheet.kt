@@ -24,8 +24,8 @@ import org.jetbrains.anko.toast
 import org.jetbrains.anko.uiThread
 
 class CheckoutSheet(context: Context,goods: GoodsActivity.GoodsItem){
-    private val ALI_ORDER_INFO_URL = "http://8.129.164.30:6710/alipay_app.do"
-    private val WX_ORDER_INFO_URL = "http://8.129.164.30:6710/wxpay_app.do"
+    private val ALI_ORDER_INFO_URL = "http://user.kaopuip.com:6710/alipay_app.do"
+    private val WX_ORDER_INFO_URL = "http://user.kaopuip.com:6710/wxpay_app.do"
     private val TAG = "CheckoutSheet"
     private val mBaseView: View = context.layoutInflater.inflate(R.layout.checkout_sheet,null)
     private val mDialog: Dialog
@@ -42,7 +42,7 @@ class CheckoutSheet(context: Context,goods: GoodsActivity.GoodsItem){
             context.showWaitingDialog("处理中")
             doAsync {
                 val info =
-                    readHttpText("$ALI_ORDER_INFO_URL?email=${app().mAPIProvider.getLoginInfo()!!.user}&goodname=${goods.Name}")
+                    readHttpText("$ALI_ORDER_INFO_URL?email=${app().api.getLoginInfo()!!.user}&goodname=${goods.Name}")
                 if(info.isEmpty()){
                     uiThread {
                         context.endWaitingDialog()
@@ -64,27 +64,15 @@ class CheckoutSheet(context: Context,goods: GoodsActivity.GoodsItem){
             context.showWaitingDialog("处理中")
             doAsync {
                 val info =
-                    readHttpText("$WX_ORDER_INFO_URL?email=$${app().mAPIProvider.getLoginInfo()!!.user}&goodname=${goods.Name}")
+                    readHttpText("$WX_ORDER_INFO_URL?email=$${app().api.getLoginInfo()!!.user}&goodname=${goods.Name}")
                 if(info.isEmpty()){
                     uiThread {
                         context.endWaitingDialog()
                         context.toast(context.getString(R.string.error_network_error))
                     }
                 }else{
-                    /*
-                    result := make(wxpay.Params)
-	                result.SetString("appid", gconf.Wxpay.AppID)
-	                result.SetString("partnerid", gconf.Wxpay.PartnerID)
-	                result.SetString("prepayid", rsp.GetString("prepay_id"))
-	                result.SetString("package", "Sign=WXPay")
-	                result.SetString("noncestr", strconv.FormatInt(time.Now().UTC().UnixNano(), 10))
-	                result.SetString("timestamp", strconv.FormatInt(time.Now().Unix(), 10))
-	                sig := client.Sign(result)
-	                result.SetString("sign", sig)
-                    */
-                    var param:Map<String,String> = mapOf()
+                    var param:MutableMap<String,String> = mutableMapOf()
                     param = Gson().fromJson(info,param.javaClass)
-                    Log.d(TAG,info)
                     val payReq = PayReq()
                     payReq.appId = param["appid"]
                     payReq.partnerId = param["partnerid"]
@@ -93,7 +81,6 @@ class CheckoutSheet(context: Context,goods: GoodsActivity.GoodsItem){
                     payReq.nonceStr = param["noncestr"]
                     payReq.timeStamp = param["timestamp"]
                     payReq.sign = param["sign"]
-                    payReq.signType = "MD5"
                     val api: IWXAPI = WXAPIFactory.createWXAPI(context,context.getString(
                         R.string.wx_appid
                     ))
@@ -116,10 +103,10 @@ class CheckoutSheet(context: Context,goods: GoodsActivity.GoodsItem){
         if(result["resultStatus"] == "9000"){
             context.toast(R.string.msg_payment_successful)
             doAsync {
-                val info = app().mAPIProvider.updateUserInfo()
+                val info = app().api.updateUserInfo()
                 uiThread {
-                    if (info != null &&mUserInfoUpdateCallback!=null){
-                        mUserInfoUpdateCallback?.let { it1 -> it1(info) }
+                    if (info.status == 0 &&mUserInfoUpdateCallback!=null){
+                        mUserInfoUpdateCallback?.let { it1 -> it1(info.content!!) }
                     }
                 }
             }

@@ -12,7 +12,7 @@ import java.lang.Exception
 import java.net.InetSocketAddress
 
 
-const val globalPublicKey = "-----BEGIN PUBLIC KEY-----\n" +
+internal const val globalPublicKey = "-----BEGIN PUBLIC KEY-----\n" +
         "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3v7WLZMVm7FUGaWWWhaR\n"+
         "OGQQy2LVtRKKLLs0xpyS8HsKxp4scoPvE83pRSA/U3zgHXF4p1i6tJHZqZBH8wp6\n"+
         "dQjchiti09BmaZBuLKLu+7UROe9Z9bLy4XOvPCo2rtzG9MbSS3IxgFeUyYHq073n\n"+

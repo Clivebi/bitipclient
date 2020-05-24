@@ -39,4 +39,5 @@
     <string name="error_network_error">网络错误</string>
     <string name="msg_payment_successful">支付成功</string>
     <string name="msg_payment_failed">支付失败</string>
+    <string name="msg_disconnected">连接已经断开</string>
 </resources>

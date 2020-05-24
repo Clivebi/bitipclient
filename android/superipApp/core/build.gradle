@@ -1,6 +1,7 @@
 apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-android-extensions'
+apply plugin: 'org.jetbrains.dokka'
 
 android {
     compileSdkVersion 29
@@ -23,6 +24,12 @@ android {
         }
     }
 
+    dokka {
+        // 输出格式，目前支持五种，html, javadoc,html-as-java, markdown,kotlin-website*
+        outputFormat = 'html'
+        // 文档输出目录
+        outputDirectory = "$buildDir/javadoc"
+    }
 }
 
 dependencies {
@@ -35,4 +42,5 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.2.0'
     implementation "org.jetbrains.anko:anko:$anko_version"
     implementation 'com.google.code.gson:gson:2.8.6'
+    implementation 'androidx.constraintlayout:constraintlayout:1.1.3'
 }

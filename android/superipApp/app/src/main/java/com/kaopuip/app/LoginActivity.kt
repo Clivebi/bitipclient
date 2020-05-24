@@ -24,7 +24,7 @@ class LoginActivity : AppCompatActivity() {
             }
             val hash = key.md5().hexString()
             doAsync {
-                val result = app().mAPIProvider.login(user,hash)
+                val result = app().api.login(user,hash)
                 uiThread {
                     if (result.status !=0){
                         toast(result.msg)

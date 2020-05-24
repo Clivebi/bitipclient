@@ -32,6 +32,7 @@ fun readHttpText(urlText: String,connectTimeout:Int=1000*5,readTimeout:Int=30*10
     return ""
 }
 
+@Suppress("DEPRECATION")
 fun isServiceRunning(context: Context,className:String):Boolean{
     val mgr = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
     val list = mgr.getRunningServices(50)

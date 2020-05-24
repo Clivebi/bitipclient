@@ -58,7 +58,7 @@ class ConfigSheet(private val context: Context):
         mBaseView.findViewById<ConstraintLayout>(R.id.alipay).setOnClickListener {
             val select = SelectorSheet(
                 context,
-                app().mAPIProvider.getAvailableProvince(),
+                app().api.getAvailableProvince(),
                 "province"
             )
             select.setListener(this).dialog().show()
@@ -67,7 +67,7 @@ class ConfigSheet(private val context: Context):
         mBaseView.findViewById<ConstraintLayout>(R.id.wxpay).setOnClickListener {
             val select = SelectorSheet(
                 context,
-                app().mAPIProvider.getAvailableCity(mBaseView.findViewById<TextView>(R.id.province).text.toString()),
+                app().api.getAvailableCity(mBaseView.findViewById<TextView>(R.id.province).text.toString()),
                 "city"
             )
             select.setListener(this).dialog().show()
@@ -76,7 +76,7 @@ class ConfigSheet(private val context: Context):
         mBaseView.findViewById<ConstraintLayout>(R.id.carriercontainer).setOnClickListener {
             val select = SelectorSheet(
                 context,
-                app().mAPIProvider.getAvailableCarrier(),
+                app().api.getAvailableCarrier(),
                 "carrier"
             )
             select.setListener(this).dialog().show()

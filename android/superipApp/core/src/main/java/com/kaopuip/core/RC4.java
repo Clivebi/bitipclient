@@ -1,6 +1,6 @@
 package com.kaopuip.core;
 
-class RC4 {
+ class RC4 {
    private int[] s;
    private int i = 0;
    private int j = 0;
@@ -16,7 +16,7 @@ class RC4 {
         for(i=0;i<256;i++) {
             j=(j+s[i]+k[i])%256;
             tmp=s[i];
-            s[i]=s[j];//交换s[i]和s[j]
+            s[i]=s[j];
             s[j]=tmp;
         }
     }
@@ -30,7 +30,7 @@ class RC4 {
             i=(i+1)%256;
             j=(j+this.s[i])%256;
             tmp=this.s[i];
-            this.s[i]=this.s[j];//交换s[x]和s[y]
+            this.s[i]=this.s[j];
             this.s[j]=tmp;
             t=(this.s[i]+this.s[j])%256;
             input[k]^=this.s[t];
