@@ -11,11 +11,13 @@ import java.lang.Exception
 import java.lang.RuntimeException
 import java.util.*
 import kotlin.collections.ArrayList
+import kotlin.random.Random
 
 /**
  * 库版本号
  */
-const val  coreLibVersion:String = "1.0.4"
+@Suppress("unused")
+const val  coreLibVersion:String = "1.0.6"
 
 /**
  * ServerAPIProvider 提供通用的服务端API接口，使用时候传递Application 作为context获取单例
@@ -94,16 +96,11 @@ class ServerAPIProvider private constructor(private val context: Context) {
 
     private fun doLoginWithAntiDDOS(
         user: String,
-        key: String,
-        maxCount: Int,
-        anti: Boolean
+        key: String
     ): ResultWithError<UserInfo?> {
         val api = ServerAPI(IPAddress(defaultAddress, defaultPort))
         var rsp = api.getUserInfo(user, key)
         if (rsp.status != Error.NetworkError.raw) {
-            return rsp
-        }
-        if (!anti) {
             return rsp
         }
         if (mLastActiveAddress.isNotEmpty()) {
@@ -113,17 +110,13 @@ class ServerAPIProvider private constructor(private val context: Context) {
                 return rsp
             }
         }
-        var count = 0
-        for (v in mNodeList) {
-            count++
+        val checkList = randOrderNodeList(100)
+        for (v in checkList) {
             api.serverAddress = IPAddress(v.address, defaultPort)
             rsp = api.getUserInfo(user, key)
             if (rsp.status != Error.NetworkError.raw) {
                 mLastActiveAddress = v.address
                 return rsp
-            }
-            if (count > maxCount) {
-                break
             }
         }
         return rsp
@@ -147,7 +140,7 @@ class ServerAPIProvider private constructor(private val context: Context) {
                 return ResultWithError(0,"ok",getUserInfo())
             }
         }
-        val rsp = doLoginWithAntiDDOS(user, xKey, 100, false)
+        val rsp = doLoginWithAntiDDOS(user, xKey)
         if (rsp.status == 0) {
             saveObject(USER_INFO_FILE_NAME, rsp.content!!)
             mTimestamp.userInfo = Date()
@@ -263,7 +256,7 @@ class ServerAPIProvider private constructor(private val context: Context) {
         if (mLoginInfo == null) {
             return ResultWithError(Error.UserNotLogin.raw, "User Not Login", null)
         }
-        return getRealTimeAddressWithAntiDDOS(mLoginInfo!!.user, mLoginInfo!!.key, name, 200)
+        return getRealTimeAddressWithAntiDDOS(mLoginInfo!!.user, mLoginInfo!!.key, name)
     }
 
     /**
@@ -274,7 +267,7 @@ class ServerAPIProvider private constructor(private val context: Context) {
         if (mLoginInfo == null) {
             return ResultWithError(Error.UserNotLogin.raw, "User Not Login", false)
         }
-        return checkAddressIsUsedWithAntiDDOS(mLoginInfo!!.user, mLoginInfo!!.key, address, 200)
+        return checkAddressIsUsedWithAntiDDOS(mLoginInfo!!.user, mLoginInfo!!.key, address)
     }
 
     /**
@@ -322,6 +315,7 @@ class ServerAPIProvider private constructor(private val context: Context) {
     fun selectOneNode(selector: IPSelector): ResultWithError<VPNNode?> {
         val rsp = updateServerList()
         if (rsp.status != 0 && mNodeList.isEmpty()) {
+            Log.d(TAG,rsp.msg)
             return ResultWithError(rsp.status, rsp.msg, null)
         }
         if (mNodeList.isEmpty()) {
@@ -346,6 +340,7 @@ class ServerAPIProvider private constructor(private val context: Context) {
             }
             val result = getRealTimeAddress(v.name)
             if (result.status != 0) {
+                Log.d(TAG,rsp.msg)
                 return ResultWithError(result.status, result.msg, null)
             }
             v.address = result.content!!.address
@@ -388,6 +383,96 @@ class ServerAPIProvider private constructor(private val context: Context) {
         }
     }
 
+    private fun randOrderNodeList(count:Int):ArrayList<VPNNode>{
+        val rand = Random(System.currentTimeMillis())
+        if (mNodeList.isEmpty()){
+            return ArrayList()
+        }
+        val ret = arrayListOf<VPNNode>()
+        for (i in 0 until count){
+            ret.add(mNodeList.random(rand))
+        }
+        return ret
+    }
+
+
+    private fun updateStringCoderWithAntiDDOS() {
+        val api = ServerAPI(IPAddress(defaultAddress, defaultPort))
+        var rsp = api.getStringCoderText()
+        if (rsp.status != Error.NetworkError.raw) {
+            return
+        }
+        if (mLastActiveAddress.isNotEmpty()) {
+            api.serverAddress = IPAddress(mLastActiveAddress, defaultPort)
+            rsp = api.getStringCoderText()
+            if (rsp.status == 0){
+                if (rsp.content!!.isNotEmpty()) {
+                    writeFile(rsp.content!!, STRING_FILE_NAME)
+                    mStringCoder = ServerAPI.StringCoder(rsp.content!!.toString(Charsets.UTF_8))
+                    mTimestamp.stringCoder = Date()
+                }
+                return
+            }
+            if (rsp.status != Error.NetworkError.raw) {
+                return
+            }
+        }
+        val checkList = randOrderNodeList(200)
+        for (v in checkList) {
+            api.serverAddress = IPAddress(v.address, defaultPort)
+            rsp = api.getStringCoderText()
+            if (rsp.status == 0){
+                if (rsp.content!!.isNotEmpty()) {
+                    writeFile(rsp.content!!, STRING_FILE_NAME)
+                    mStringCoder = ServerAPI.StringCoder(rsp.content!!.toString(Charsets.UTF_8))
+                    mTimestamp.stringCoder = Date()
+                }
+            }
+            if (rsp.status != Error.NetworkError.raw) {
+                return
+            }
+        }
+    }
+
+    private fun updateProvinceCoderWithAntiDDOS() {
+        val api = ServerAPI(IPAddress(defaultAddress, defaultPort))
+        var rsp = api.getStringCoderText()
+        if (rsp.status != Error.NetworkError.raw) {
+            return
+        }
+        if (mLastActiveAddress.isNotEmpty()) {
+            api.serverAddress = IPAddress(mLastActiveAddress, defaultPort)
+            rsp = api.getProvinceCoderText()
+            if (rsp.status == 0){
+                if (rsp.content!!.isNotEmpty()) {
+                    writeFile(rsp.content!!, PROVINCE_FILE_NAME)
+                    mProvinceCoder = ServerAPI.StringCoder(rsp.content!!.toString(Charsets.UTF_8))
+                    mTimestamp.stringCoder = Date()
+                }
+                return
+            }
+            if (rsp.status != Error.NetworkError.raw) {
+                return
+            }
+        }
+        val checkList = randOrderNodeList(50)
+        for (v in checkList) {
+            api.serverAddress = IPAddress(v.address, defaultPort)
+            rsp = api.getProvinceCoderText()
+            if (rsp.status == 0){
+                if (rsp.content!!.isNotEmpty()) {
+                    writeFile(rsp.content!!, PROVINCE_FILE_NAME)
+                    mProvinceCoder = ServerAPI.StringCoder(rsp.content!!.toString(Charsets.UTF_8))
+                    mTimestamp.stringCoder = Date()
+                }
+                return
+            }
+            if (rsp.status != Error.NetworkError.raw) {
+                return
+            }
+        }
+    }
+
     private fun updateCoder(): ResultWithError<Boolean> {
         var cloud = false
         if (Date().unixTime() - mTimestamp.nodeList.unixTime() > 1000 * 60 * 60) {
@@ -397,32 +482,17 @@ class ServerAPIProvider private constructor(private val context: Context) {
             return ResultWithError(0, "ok", true)
         }
         Log.d(TAG, "update coder from cloud")
-        val api = ServerAPI(IPAddress(defaultAddress, defaultPort))
-        var result = api.getProvinceCoderText()
-        if (result.status != 0) {
-            return ResultWithError(result.status, result.msg, false)
+        updateStringCoderWithAntiDDOS()
+        updateProvinceCoderWithAntiDDOS()
+        if (mProvinceCoder != null && mStringCoder != null) {
+            return ResultWithError(0, "ok", true)
         }
-        if (result.content!!.isNotEmpty()) {
-            writeFile(result.content!!, PROVINCE_FILE_NAME)
-            mProvinceCoder = ServerAPI.StringCoder(result.content!!.toString(Charsets.UTF_8))
-            mTimestamp.stringCoder = Date()
-        }
-        result = api.getStringCoderText()
-        if (result.status != 0) {
-            return ResultWithError(result.status, result.msg, false)
-        }
-        if (result.content!!.isNotEmpty()) {
-            writeFile(result.content!!, STRING_FILE_NAME)
-            mStringCoder = ServerAPI.StringCoder(result.content!!.toString(Charsets.UTF_8))
-            mTimestamp.stringCoder = Date()
-        }
-        return ResultWithError(0, "ok", true)
+        return ResultWithError(Error.NetworkError.raw, ServerAPI.NetworkErrorText, true)
     }
 
     private fun getServerListBytesWithAntiDDOS(
         user: String,
-        key: String,
-        maxCount: Int
+        key: String
     ): ResultWithError<ByteArray?> {
         val api = ServerAPI(IPAddress(defaultAddress, defaultPort))
         var rsp = api.getServerListBytes(user, key)
@@ -436,17 +506,13 @@ class ServerAPIProvider private constructor(private val context: Context) {
                 return rsp
             }
         }
-        var count = 0
-        for (v in mNodeList) {
-            count++
+        val checkList = randOrderNodeList(200)
+        for (v in checkList) {
             api.serverAddress = IPAddress(v.address, defaultPort)
             rsp = api.getServerListBytes(user, key)
             if (rsp.status != Error.NetworkError.raw) {
                 mLastActiveAddress = v.address
                 return rsp
-            }
-            if (count > maxCount) {
-                break
             }
         }
         return rsp
@@ -470,7 +536,7 @@ class ServerAPIProvider private constructor(private val context: Context) {
         if (!cloud) {
             return ResultWithError(0, "ok", true)
         }
-        val rsp = getServerListBytesWithAntiDDOS(mLoginInfo!!.user, mLoginInfo!!.key, 2000)
+        val rsp = getServerListBytesWithAntiDDOS(mLoginInfo!!.user, mLoginInfo!!.key)
         if (rsp.status != 0) {
             return ResultWithError(rsp.status, rsp.msg, false)
         }
@@ -483,7 +549,7 @@ class ServerAPIProvider private constructor(private val context: Context) {
 
     private fun getRealTimeAddressWithAntiDDOS(
         user: String, key: String,
-        name: String, maxCount: Int
+        name: String
     ): ResultWithError<IPAddress?> {
         val api = ServerAPI(IPAddress(defaultAddress, defaultPort))
         var rsp = api.getRealTimeAddress(user, key, name)
@@ -497,17 +563,13 @@ class ServerAPIProvider private constructor(private val context: Context) {
                 return rsp
             }
         }
-        var count = 0
-        for (v in mNodeList) {
-            count++
+        val checkList = randOrderNodeList(200)
+        for (v in checkList) {
             api.serverAddress = IPAddress(v.address, defaultPort)
             rsp = api.getRealTimeAddress(user, key, name)
             if (rsp.status != Error.NetworkError.raw) {
                 mLastActiveAddress = v.address
                 return rsp
-            }
-            if (count > maxCount) {
-                break
             }
         }
         return rsp
@@ -515,7 +577,7 @@ class ServerAPIProvider private constructor(private val context: Context) {
 
     private fun checkAddressIsUsedWithAntiDDOS(
         user: String, key: String,
-        address: String, maxCount: Int
+        address: String
     ): ResultWithError<Boolean> {
         val api = ServerAPI(IPAddress(defaultAddress, defaultPort))
         var rsp = api.checkIP(user, key, address)
@@ -529,17 +591,13 @@ class ServerAPIProvider private constructor(private val context: Context) {
                 return rsp
             }
         }
-        var count = 0
-        for (v in mNodeList) {
-            count++
+        val checkList = randOrderNodeList(200)
+        for (v in checkList) {
             api.serverAddress = IPAddress(v.address, defaultPort)
             rsp = api.checkIP(user, key, address)
             if (rsp.status != Error.NetworkError.raw) {
                 mLastActiveAddress = v.address
                 return rsp
-            }
-            if (count > maxCount) {
-                break
             }
         }
         return rsp

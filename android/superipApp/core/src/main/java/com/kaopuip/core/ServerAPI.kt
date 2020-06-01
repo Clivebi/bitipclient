@@ -212,7 +212,7 @@ internal  class ServerAPI(var serverAddress: IPAddress) {
                     )
                 }
             }catch (exp:IOException){
-                exp.printStackTrace()
+                //exp.printStackTrace()
             }
         }
         return ResultWithError(

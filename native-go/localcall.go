@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -34,6 +35,7 @@ const (
 	URL_IP         = "http://%v:6709/getip2.do"
 	URL_IP_CHECK   = "http://%v:6709/checkip.do"
 	defaultPort    = 8808
+	libVersion     = "1.0.6"
 )
 
 type NotifyClose interface {
@@ -123,7 +125,7 @@ func (s *SDKServer) isHttpError(err error) bool {
 	return strings.Contains(err.Error(), "http response")
 }
 
-//使用默认的接口出去，以便绕过自己的代理
+//DoHttpRequestWithTimeout 带超时http请求
 func (s *SDKServer) DoHttpRequestWithTimeout(url string, timeout time.Duration) ([]byte, error) {
 	client := http.Client{
 		Timeout: timeout,
@@ -235,6 +237,18 @@ func (s *SDKServer) DoUpdateCoder() error {
 	return nil
 }
 
+func (s *SDKServer) randOrderNodeList(count int) []*VPNNode {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	if len(s.nodes) == 0 {
+		return []*VPNNode{}
+	}
+	ret := make([]*VPNNode, count)
+	for i := 0; i < count; i++ {
+		ret[i] = s.nodes[r.Intn(len(s.nodes))]
+	}
+	return ret
+}
+
 func (s *SDKServer) DoHttpRequestWithAntiDDOS(formatURL string, param *url.Values, timeout time.Duration, maxcount int) ([]byte, error) {
 	url := fmt.Sprintf(formatURL, CMNET_HOST) + "?" + param.Encode()
 	buf, err := s.DoHttpRequestWithTimeout(url, timeout)
@@ -269,8 +283,9 @@ func (s *SDKServer) DoHttpRequestWithAntiDDOS(formatURL string, param *url.Value
 		}
 	}
 	log.Println("network error <", formatURL, "> try cached node list")
-	tryCount := 0
-	for _, v := range s.nodes {
+	checkList := s.randOrderNodeList(maxcount)
+
+	for _, v := range checkList {
 		url := fmt.Sprintf(formatURL, v.Address) + "?" + param.Encode()
 		buf, err := s.DoHttpRequestWithTimeout(url, timeout)
 		if err == nil {
@@ -278,10 +293,6 @@ func (s *SDKServer) DoHttpRequestWithAntiDDOS(formatURL string, param *url.Value
 		}
 		if s.isHttpError(err) {
 			return buf, err
-		}
-		tryCount++
-		if tryCount > maxcount {
-			return nil, err
 		}
 	}
 	return nil, err
@@ -596,6 +607,10 @@ func (o *SDKServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		} else {
 			buf = []byte("not connected")
 		}
+	}
+	if r.URL.EscapedPath() == "/bitip/version.do" {
+		buf = []byte(libVersion)
+		err = nil
 	}
 	if r.URL.EscapedPath() == "/bitip/shutdown.do" {
 		if o.con != nil {

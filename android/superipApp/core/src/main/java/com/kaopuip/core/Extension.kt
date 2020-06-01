@@ -28,6 +28,7 @@ internal fun String.md5():ByteArray{
     return md.digest()
 }
 
+/*
 internal fun String.decodeHexString():ByteArray{
     val s = this.replace(" ", "")
     val bs = ByteArray(s.length/2)
@@ -35,7 +36,7 @@ internal fun String.decodeHexString():ByteArray{
         bs[i] = s.substring(i*2, i*2+2).toInt(16).toByte()
     }
     return bs
-}
+}*/
 
 internal fun ByteArray.hexString():String{
     if (this.isEmpty()){
