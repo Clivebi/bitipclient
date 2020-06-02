@@ -6,18 +6,27 @@
     android:layout_height="match_parent"
     android:background="@color/viewBackground">
 
-    <LinearLayout
-        android:id="@+id/itemsView"
+    <com.kaopuip.app.common.LimitScrollView
+        android:id="@+id/sview"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
-        android:divider="@drawable/divider"
-        android:orientation="vertical"
-        android:paddingBottom="16dp"
-        android:showDividers="middle|beginning|end"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        android:layout_height="0dp"
+        android:maxHeight="400dp"
+        android:scrollbarStyle="outsideInset"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <LinearLayout
+            android:id="@+id/itemsView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:divider="@drawable/divider"
+            android:orientation="vertical"
+            android:paddingBottom="16dp"
+            android:showDividers="middle|beginning|end"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+    </com.kaopuip.app.common.LimitScrollView>
 
     <Button
         android:id="@+id/cancel"
@@ -31,5 +40,5 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/itemsView" />
+        app:layout_constraintTop_toBottomOf="@+id/sview" />
 </androidx.constraintlayout.widget.ConstraintLayout>

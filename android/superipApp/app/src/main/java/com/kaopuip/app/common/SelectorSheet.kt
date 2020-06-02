@@ -14,6 +14,7 @@ import com.kaopuip.app.R
 import org.jetbrains.anko.backgroundColor
 import org.jetbrains.anko.layoutInflater
 import org.jetbrains.anko.textColor
+import org.jetbrains.anko.windowManager
 
 class SelectorSheet(private val context: Context, private val items:Array<String>,val key:String){
     interface Listener{
@@ -32,6 +33,7 @@ class SelectorSheet(private val context: Context, private val items:Array<String
     }
 
     init {
+        mBaseView.findViewById<LimitScrollView>(R.id.sview).mMaxHeight = context.windowManager.defaultDisplay.height/2
         mItemContainer = mBaseView.findViewById(R.id.itemsView)
         mItemContainer.removeAllViews()
         mCancelView = mBaseView.findViewById(R.id.cancel)
@@ -46,7 +48,7 @@ class SelectorSheet(private val context: Context, private val items:Array<String
             view.textColor = ContextCompat.getColor(context, R.color.editText)
             view.layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                context.dp2px(48))
+                context.dp2px(50))
             view.gravity = Gravity.CENTER
             view.isClickable = true
             view.backgroundColor = ContextCompat.getColor(context,R.color.colorPrimary)

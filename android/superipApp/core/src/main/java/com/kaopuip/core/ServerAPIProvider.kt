@@ -17,7 +17,7 @@ import kotlin.random.Random
  * 库版本号
  */
 @Suppress("unused")
-const val  coreLibVersion:String = "1.0.6"
+const val  coreLibVersion:String = "1.0.7"
 
 /**
  * ServerAPIProvider 提供通用的服务端API接口，使用时候传递Application 作为context获取单例
@@ -399,6 +399,14 @@ class ServerAPIProvider private constructor(private val context: Context) {
     private fun updateStringCoderWithAntiDDOS() {
         val api = ServerAPI(IPAddress(defaultAddress, defaultPort))
         var rsp = api.getStringCoderText()
+        if (rsp.status == 0){
+            if (rsp.content!!.isNotEmpty()) {
+                writeFile(rsp.content!!, STRING_FILE_NAME)
+                mStringCoder = ServerAPI.StringCoder(rsp.content!!.toString(Charsets.UTF_8))
+                mTimestamp.stringCoder = Date()
+            }
+            return
+        }
         if (rsp.status != Error.NetworkError.raw) {
             return
         }
@@ -436,7 +444,15 @@ class ServerAPIProvider private constructor(private val context: Context) {
 
     private fun updateProvinceCoderWithAntiDDOS() {
         val api = ServerAPI(IPAddress(defaultAddress, defaultPort))
-        var rsp = api.getStringCoderText()
+        var rsp = api.getProvinceCoderText()
+        if (rsp.status == 0){
+            if (rsp.content!!.isNotEmpty()) {
+                writeFile(rsp.content!!, PROVINCE_FILE_NAME)
+                mProvinceCoder = ServerAPI.StringCoder(rsp.content!!.toString(Charsets.UTF_8))
+                mTimestamp.stringCoder = Date()
+            }
+            return
+        }
         if (rsp.status != Error.NetworkError.raw) {
             return
         }
