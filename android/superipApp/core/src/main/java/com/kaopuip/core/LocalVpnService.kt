@@ -137,7 +137,7 @@ class LocalVpnService : VpnService() {
             val channel = NotificationChannel(
                 "28E8B700-54E4-49A2-ABF0-67D0DACBC61F",
                 "vpninfo",
-                NotificationManager.IMPORTANCE_DEFAULT
+                NotificationManager.IMPORTANCE_LOW
             )
             channel.setSound(null,null)
             channel.enableLights(false)
