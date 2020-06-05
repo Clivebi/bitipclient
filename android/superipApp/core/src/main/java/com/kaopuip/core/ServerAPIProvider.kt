@@ -17,7 +17,7 @@ import kotlin.random.Random
  * 库版本号
  */
 @Suppress("unused")
-const val  coreLibVersion:String = "1.0.7"
+const val  coreLibVersion:String = "1.0.8"
 
 /**
  * ServerAPIProvider 提供通用的服务端API接口，使用时候传递Application 作为context获取单例
@@ -144,7 +144,7 @@ class ServerAPIProvider private constructor(private val context: Context) {
         if (rsp.status == 0) {
             saveObject(USER_INFO_FILE_NAME, rsp.content!!)
             mTimestamp.userInfo = Date()
-            mLoginInfo = LoginInfo(user, key)
+            mLoginInfo = LoginInfo(user, xKey)
             save()
         }
         return rsp

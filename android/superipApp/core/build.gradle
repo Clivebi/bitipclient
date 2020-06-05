@@ -44,3 +44,32 @@ dependencies {
     implementation 'com.google.code.gson:gson:2.8.6'
     implementation 'androidx.constraintlayout:constraintlayout:1.1.3'
 }
+
+apply plugin: 'maven'
+ext {
+    // 从Github上clone下来的项目的本地地址
+    MAVEN_PATH ="build/maven"
+    PUBLISH_GROUP_ID = 'com.bitip'
+    PUBLISH_ARTIFACT_ID = 'core'
+    PUBLISH_VERSION = '1.0.8'
+}
+uploadArchives {
+    repositories.mavenDeployer {
+        def deployPath = file(project.MAVEN_PATH)
+        repository(url: "file://${deployPath.absolutePath}")
+        pom.project {
+            groupId project.PUBLISH_GROUP_ID
+            artifactId project.PUBLISH_ARTIFACT_ID
+            version project.PUBLISH_VERSION
+        }
+    }
+}
+
+// 源代码一起打包
+task androidSourcesJar(type: Jar) {
+    classifier = 'sources'
+    from android.sourceSets.main.java.sourceFiles
+}
+artifacts {
+    archives androidSourcesJar
+}

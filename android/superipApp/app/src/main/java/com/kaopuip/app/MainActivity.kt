@@ -22,10 +22,7 @@ import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.kaopuip.app.common.*
-import com.kaopuip.core.LocalVpnService
-import com.kaopuip.core.ResultWithError
-import com.kaopuip.core.ServerAPIProvider
-import com.kaopuip.core.VPNNode
+import com.kaopuip.core.*
 import kotlinx.android.parcel.Parcelize
 import kotlinx.android.synthetic.main.activity_main.*
 import org.jetbrains.anko.doAsync
@@ -193,6 +190,7 @@ class MainActivity : AppCompatActivity(),
             startActivity<LoginActivity>()
             finishAffinity()
         }
+        Log.d(TAG, "coreLibVersion:$coreLibVersion")
         //mConfigs.add(ServerAPIProvider.IPSelector("","","",false))
         val configs = Storage(this).loadObject<SelectorConfig>(CONFIG_FILE_NAME,SelectorConfig::class.java.classLoader)
         if(configs != null && configs.dataList.isEmpty()){
