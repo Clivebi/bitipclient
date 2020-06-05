@@ -54,7 +54,8 @@ http://127.0.0.1:8978/bitip/options.do?ignoreusedip=true&province=x&city=y&carri
 返回：设置成功后的配置json
 ```
 
-### 连接
+### 连接  
+根据设置节点的选取条件选取一个节点进行连接，每调用一次都会断开上一个连接（如果已经连接），使用一个新节点连接  
 ```
 http://127.0.0.1:8978/bitip/changeip.do
 参数：无
