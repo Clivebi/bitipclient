@@ -21,6 +21,6 @@
 包含windows端SDK以及第三方集成文档   
 查看文档：https://github.com/Clivebi/bitipclient/tree/master/windows/readme.md
 
-##android
+## android
 包含Android端完整源码，sdk等
 查看文档：https://github.com/Clivebi/bitipclient/blob/master/android/readme.md
