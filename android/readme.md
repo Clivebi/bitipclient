@@ -1,5 +1,6 @@
 ## Android版SDK集成指南  
 Project 的build.gradle添加maven依赖  
+
 allprojects {  
     repositories {  
         google()  
@@ -9,10 +10,12 @@ allprojects {
 }
 
 Module 的build.gradle  添加  
+
 `implementation 'com.bitip:core:1.0.8'`
 
 添加权限  
-<uses-permission android:name="android.permission.INTERNET" />
+
+`<uses-permission android:name="android.permission.INTERNET" />`
 
 
 ## 代码结构说明  
