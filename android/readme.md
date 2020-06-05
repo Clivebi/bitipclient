@@ -7,17 +7,11 @@ Project 的build.gradle添加maven依赖
 
 ```
 allprojects {  
-
     repositories {  
-
         google()  
-
         jcenter()  
-
         maven{ url "https://raw.githubusercontent.com/Clivebi/bitipclient/master/android/superipApp/core/maven"}  
-
     }  
-
 }
 ```
 
@@ -44,14 +38,10 @@ AndroidManifest.xml添加权限
 @Override
 
     protected void onCreate(Bundle savedInstanceState) {
-
         super.onCreate(savedInstanceState);
-
         setContentView(R.layout.activity_main);
-
         //监听广播
         registerReceiver(mReceive,new IntentFilter(LocalVpnService.ACTION_VPN_STATE_CHANGED));
-
     }
 ```
 3. 需要的时候选择节点，进行连接
