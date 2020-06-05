@@ -32,18 +32,15 @@ AndroidManifest.xml添加权限
 ### 接口指引
 1. 在Application实例或者Activity实例onCreate中初始化coreLib库，推荐在Application的onCreate中初始化,初始化参数为接入服务器的域名和端口  
 `
-
 @Override
     protected void onCreate .... {
         .....
         ServerAPIProvider.Companion.init(this, "cmnet.kaopuip.com", 6709);
         .....
     }
-
 `
 2. 在activity onCreate里面注册广播，监听服务连接广播消息
-`
-
+```
 @Override
 
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,10 +53,9 @@ AndroidManifest.xml添加权限
         registerReceiver(mReceive,new IntentFilter(LocalVpnService.ACTION_VPN_STATE_CHANGED));
 
     }
-`
+```
 3. 需要的时候选择节点，进行连接
-`
-
+```
 protected void executeChangeIP() {
         //第一步检查是否需要登录  
         if (null == ServerAPIProvider.Companion.getInstance().getLoginInfo()) {
@@ -90,7 +86,7 @@ protected void executeChangeIP() {
             startVPN(node.getContent());
         });
     }
-`
+```
 完整例子参考：https://github.com/Clivebi/bitipclient/tree/master/android/javademo  
 
 
