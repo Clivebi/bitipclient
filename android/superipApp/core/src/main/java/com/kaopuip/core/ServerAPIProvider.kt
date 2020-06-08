@@ -17,7 +17,7 @@ import kotlin.random.Random
  * 库版本号
  */
 @Suppress("unused")
-const val  coreLibVersion:String = "1.0.8"
+const val  coreLibVersion:String = "1.0.9"
 
 /**
  * ServerAPIProvider 提供通用的服务端API接口，使用时候传递Application 作为context获取单例

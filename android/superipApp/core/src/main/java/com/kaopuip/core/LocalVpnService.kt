@@ -220,6 +220,8 @@ class LocalVpnService : VpnService() {
         if (result.result == null) {
             broadcastConnectResult(id, STATE_CONNECT_FAILED, result.error)
             Log.e(TAG, "connect server failed:" + result.error)
+            updater.isConnecting = false
+            updater.isExit = true
             stopVPN()
             return
         }
@@ -232,6 +234,8 @@ class LocalVpnService : VpnService() {
                 TAG,
                 ESTABLISH_ERROR
             )
+            updater.isConnecting = false
+            updater.isExit = true
             stopVPN()
             return
         }
