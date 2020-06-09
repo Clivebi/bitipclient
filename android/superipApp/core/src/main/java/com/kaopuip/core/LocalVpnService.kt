@@ -72,6 +72,8 @@ class LocalVpnService : VpnService() {
         private var drawIndex: Int = 0
         override fun run() {
             if (isExit) {
+                val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                mgr.cancel(200)
                 return
             }
             mSendBytes += mSendSpeed
@@ -148,8 +150,6 @@ class LocalVpnService : VpnService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.getStringExtra("COMMAND") == "STOP") {
-            val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            mgr.cancel(200)
             this.stopVPN()
         } else {
             mParameter = intent!!.getParcelableExtra(KEY_START_PARAMETER)!!
@@ -169,8 +169,6 @@ class LocalVpnService : VpnService() {
 
     override fun onDestroy() {
         super.onDestroy()
-        val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        mgr.cancel(200)
         stopSelf()
     }
 

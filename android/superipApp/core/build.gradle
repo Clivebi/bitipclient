@@ -11,7 +11,7 @@ android {
         minSdkVersion 21
         targetSdkVersion 29
         versionCode 1
-        versionName '1.0.9'
+        versionName '1.0.10'
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles 'consumer-rules.pro'
@@ -51,7 +51,7 @@ ext {
     MAVEN_PATH ="maven"
     PUBLISH_GROUP_ID = 'com.bitip'
     PUBLISH_ARTIFACT_ID = 'core'
-    PUBLISH_VERSION = '1.0.9'
+    PUBLISH_VERSION = '1.0.10'
 }
 uploadArchives {
     repositories.mavenDeployer {
